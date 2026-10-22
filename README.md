@@ -22,3 +22,20 @@ Data exploration and model development have not started.
 
 - Python 3.14.8
 - Package versions are recorded in requirements.txt.
+
+## Data source
+
+This project uses MovieLens Latest Small, published by GroupLens
+at the University of Minnesota.
+
+- [Dataset and download](https://grouplens.org/datasets/movielens/latest/)
+- [Documentation and usage terms](https://files.grouplens.org/datasets/movielens/ml-latest-small-README.html)
+- Dataset snapshot: September 26, 2018.
+
+Download `ml-latest-small.zip` and extract its contents into `data/raw/`.
+The CSV files should be inside `data/raw/ml-latest-small/`.
+Raw data files are excluded from Git.
+
+Reference: F. Maxwell Harper and Joseph A. Konstan. 2015.
+The MovieLens Datasets: History and Context.
+https://doi.org/10.1145/2827872
