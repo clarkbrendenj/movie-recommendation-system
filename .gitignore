@@ -1,0 +1,15 @@
+# Python environment and temporary files
+.venv/
+__pycache__/
+*.py[cod]
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+
+# Downloaded and generated data
+/data/
