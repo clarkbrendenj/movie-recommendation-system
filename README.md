@@ -15,51 +15,42 @@ with an emphasis on understanding model behavior and evaluating results.
 
 ## Current status
 
-Notebooks 01–07 cover exploration, a canonical per-user chronological split,
-popularity, collaborative and content models, semantic embeddings, and hybrid
-selection with a final holdout evaluation.
-
-Notebook [08_learned_collaborative_filtering.ipynb](notebooks/08_learned_collaborative_filtering.ipynb)
-adds BPR matrix factorization and EASE. It compares fixed validation search
-grids against recomputed popularity, item-based CF, and hybrid rankings using
-Recall@10 and binary NDCG@10.
-
-To run notebook 08, first run notebook 01 to create the canonical split and
-notebook 04 to create the plot catalogs. Run notebook 08 from top to bottom
-using the project environment. It uses the existing NumPy/SciPy dependencies;
-no additional model library is required. Compatible validation results from
-notebooks 01, 02, and 07 are checked when present.
-
-Notebook 08 writes its search tables, selected settings, ordered
-recommendations, BPR factors, chart, and provenance manifest under
-`data/processed/per_user_chronological_60_20_20_v1/notebook08_learned_cf/`.
-It is a validation development experiment and does not read test labels or
-replace notebook 07's frozen selection. A fresh evaluation phase is needed
-for a final claim after further model development.
-
-Focused numerical and ranking checks can be run with:
-
-```powershell
-.venv/Scripts/python.exe -m unittest discover -s tests -v
-```
+The Python environment and initial dependencies are configured.
+Data exploration and model development have not started.
 
 ## Environment
 
-- Python 3.14.8
-- Package versions are recorded in requirements.txt.
+The notebooks use a Python 3.14 environment. Core package versions are recorded
+in [requirements.txt](requirements.txt). Select the project environment as the
+Jupyter kernel and run notebooks from inside the repository.
 
-## Data source
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
 
-This project uses MovieLens Latest Small, published by GroupLens
-at the University of Minnesota.
+Notebook 05, and notebook 07 if an embedding model is selected, additionally
+require `sentence-transformers`, `torch`, and `tqdm`. These packages are not
+included in the current core requirements file:
+
+```bash
+python -m pip install sentence-transformers torch tqdm
+```
+
+The encoder runs on CPU. Its first load needs internet access unless the model
+is cached; full-corpus chunk encoding is substantially slower than the ratings
+baselines. The embedding manifest records the encoder revision used by a run.
+
+## Data
+
+### MovieLens Latest Small
+
+Download and extract the September 26, 2018 dataset snapshot into
+`data/raw/ml-latest-small/`. The required files are `movies.csv` and `ratings.csv`.
 
 - [Dataset and download](https://grouplens.org/datasets/movielens/latest/)
 - [Documentation and usage terms](https://files.grouplens.org/datasets/movielens/ml-latest-small-README.html)
-- Dataset snapshot: September 26, 2018.
-
-Download `ml-latest-small.zip` and extract its contents into `data/raw/`.
-The CSV files should be inside `data/raw/ml-latest-small/`.
-Raw data files are excluded from Git.
 
 Reference: F. Maxwell Harper and Joseph A. Konstan. 2015.
 The MovieLens Datasets: History and Context.
