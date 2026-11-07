@@ -20,6 +20,7 @@ genre and plot-text features, embeddings, hybrid recommendations, and learned
 collaborative models. Notebook 09 tests director, writer, and cast features.
 Notebook 10 tests whether vote-aware IMDb ratings improve the credits hybrid.
 Notebook 11 benchmarks a budget-limited LLM reranker against EASE and that hybrid.
+Notebook 12 tests direct LLM movie generation from full user rating histories.
 
 ## Environment
 
@@ -204,3 +205,36 @@ remain in metric denominators, and partial live runs do not produce an LLM
 leaderboard. Exports and provenance are saved under
 `data/processed/per_user_chronological_60_20_20_v1/notebook11_llm_reranking/`.
 This is an exploratory retrospective pilot, not an independent test result.
+
+### Direct LLM recommendations (notebook 12)
+
+[Notebook 12](notebooks/12_llm_direct_recommendations.ipynb) tests an LLM as an
+independent movie recommender. It receives each user's **entire training-rating
+history**, as movie titles and star ratings, and generates ten recommendations
+using its pretrained knowledge. It receives no shortlist, model scores, movie
+IDs, plot/cast metadata, or IMDb averages. No browsing tools are enabled.
+
+The experiment reuses notebook 11's 100 users and verified full-catalog EASE
+and IMDb hybrid baselines. Match generated titles and years to the catalog
+only after generation. The fixed matcher uses normalized titles, MovieLens
+aliases, and exact release years; ambiguous matches are not guessed. Invalid,
+unmatched, duplicate, already-rated, and outside-training-catalog suggestions
+receive no hits and retain their original rank positions. Every validation
+positive remains in metric denominators. Catalog mismatches and incomplete
+rating labels limit what this offline benchmark says about open-world quality.
+
+Prepare offline, then enable API calls explicitly if desired:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/llm_direct_recommendations.py
+.\.venv\Scripts\python.exe scripts/llm_direct_recommendations.py --live
+```
+
+Credentials use the same local setup as notebook 11. Both experiments share
+notebook 11's **existing $1 reservation ledger and lock**; previous reservations
+are preserved. The full pending batch must fit the remaining allowance before
+new requests start. Calls are cached, automatic retries are disabled, and
+notebook 12 defaults to no API calls. Output includes generated titles, matching
+audits, full-catalog metrics, paired intervals, usage, and provenance under
+`data/processed/per_user_chronological_60_20_20_v1/notebook12_llm_direct/`.
+This remains exploratory validation and does not read test feedback.
