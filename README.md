@@ -18,6 +18,8 @@ with an emphasis on understanding model behavior and evaluating results.
 The notebooks cover exploration, popularity and collaborative baselines,
 genre and plot-text features, embeddings, hybrid recommendations, and learned
 collaborative models. Notebook 09 tests director, writer, and cast features.
+Notebook 10 tests whether vote-aware IMDb ratings improve the credits hybrid.
+Notebook 11 benchmarks a budget-limited LLM reranker against EASE and that hybrid.
 
 ## Environment
 
@@ -106,3 +108,99 @@ Run the numerical, linkage, fallback, and ranking checks with:
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
+
+### IMDb ratings experiment (notebook 10)
+
+After notebooks 01, 04, and 09, run
+[notebook 10](notebooks/10_imdb_ratings_recommendations.ipynb). It reconstructs
+notebook 09's selected CF + plots + credits control and verifies its saved
+per-user validation results before adding an IMDb audience-rating signal.
+
+The notebook prepares its ratings automatically, or prepare them in advance:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/prepare_imdb_ratings.py
+```
+
+The helper streams IMDb's official `title.ratings.tsv.gz`, joins `averageRating`
+and `numVotes` through exact IDs in MovieLens `links.csv`, and caches only
+matching rows with source timestamps and checksums. No API key is required.
+Reruns verify and reuse the cache; `--force` refreshes it. The same IMDb
+[non-commercial dataset terms](https://data.imdb.com/non-commercial-datasets/)
+and HTTPS verification policy as the credits helper apply.
+
+To reduce the influence of small vote counts, the model shrinks each IMDb
+average toward the mean among rated training-candidate movies, with a fixed
+1,000-vote prior. A tunable centered quality adjustment reranks personalized
+scores; missing ratings contribute zero adjustment and never remove movies.
+This smoothing is our model choice, not IMDb's internal rating formula.
+
+Notebook 10 compares popularity, IMDb-only, CF + plots, and the credits hybrid,
+with and without ratings. It uses the same validation users, seen exclusions,
+Recall@10 and NDCG@10 denominators, checks the zero-weight control, and saves
+the full weight grid, paired changes, per-user results, readable examples, and
+provenance under
+`data/processed/per_user_chronological_60_20_20_v1/notebook10_imdb_ratings/`.
+
+IMDb aggregates are current snapshots and can include votes posted after the
+MovieLens interactions. Results are retrospective and validation-selected;
+they are not evidence of historically available performance. Notebook 10 never
+reads test feedback or changes notebook 07's frozen selection. Run its linkage,
+cache, smoothing, and reranking checks with the unittest command above.
+
+### LLM reranking pilot (notebook 11)
+
+After notebooks 01, 04, 09, and 10, open
+[notebook 11](notebooks/11_llm_reranking_experiment.ipynb). It samples 100
+validation users reproducibly, retrieves 100 unseen movies per user with EASE
+(fixed regularization 50), and asks GPT-6 Luna to rank ten of those movies.
+Only the most recent 30 training ratings and movie metadata enter the prompts.
+Validation positives never enter prompts or candidate construction. EASE and
+the IMDb hybrid are scored on the same users, with shared-shortlist and
+full-catalog baselines reported separately.
+
+Prepare requests and evaluate baselines without making API calls:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/llm_recommendation_experiment.py
+```
+
+Set `OPENAI_API_KEY` securely in the environment, or copy
+[.env.example](.env.example) to a local `.env` and fill it in. The real key must
+never appear in notebook source, chat, or Git. The existing ignore rules cover
+`.env` and all caches under `data/`. The runner uses Python's HTTPS client;
+no OpenAI SDK installation is needed.
+
+Make live requests explicitly (or set `RUN_LIVE = True` in notebook 11):
+
+```powershell
+.\.venv\Scripts\python.exe scripts/llm_recommendation_experiment.py --live
+```
+
+If a key is rejected with HTTP 401, replace it locally and resume explicitly:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/llm_recommendation_experiment.py --live --retry-auth-failures
+```
+
+This preserves the failed attempt and its original budget reservation. Other
+failed or uncertain calls are never automatically retried.
+
+The client permits at most **$1 in cumulative conservative cost reservations**
+at the recorded GPT-6 Luna rates, limits output to 512 tokens, disables tools
+and reasoning, makes one call at a time, and never retries automatically.
+It caches successful, invalid, and failed responses by complete request hash.
+Uncertain calls retain their cost reservation; concurrent live runs are blocked.
+This client safeguard is not an account-level billing limit. Check current
+[model pricing](https://developers.openai.com/api/docs/models/gpt-6-luna)
+before future runs, keep Auto Recharge off when using only included credits,
+and do not delete the ledger to bypass the ceiling.
+
+Results include shortlist coverage, Recall@10, NDCG@10, paired user-bootstrap
+intervals, response validity, latency, returned model versions, and token cost
+estimates. Failed LLM responses count as empty lists; a separately labeled EASE
+fallback is also evaluated. Users are never dropped, all validation positives
+remain in metric denominators, and partial live runs do not produce an LLM
+leaderboard. Exports and provenance are saved under
+`data/processed/per_user_chronological_60_20_20_v1/notebook11_llm_reranking/`.
+This is an exploratory retrospective pilot, not an independent test result.
