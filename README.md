@@ -34,6 +34,11 @@ collaborative models. Notebook 09 tests director, writer, and cast features.
 Notebook 10 tests whether vote-aware IMDb ratings improve the credits hybrid.
 Notebook 11 benchmarks a budget-limited LLM reranker against EASE and that hybrid.
 Notebook 12 tests direct LLM movie generation from full user rating histories.
+Notebook 13 tests graded rating profiles and explicit dislike penalties against
+the selected IMDb hybrid.
+Notebook 14 tests lowering binary likes from 8/10 to 7/10 in the selected model.
+Notebook 15 extends the selected hybrid to whole TV series using frozen content
+features, with a separate audit of the small observed TV-rating subset.
 
 ## Environment
 
@@ -251,3 +256,137 @@ notebook 12 defaults to no API calls. Output includes generated titles, matching
 audits, full-catalog metrics, paired intervals, usage, and provenance under
 `data/processed/per_user_chronological_60_20_20_v1/notebook12_llm_direct/`.
 This remains exploratory validation and does not read test feedback.
+
+### Negative and graded ratings (notebook 13)
+
+[Notebook 13](notebooks/13_negative_ratings_recommendations.ipynb) compares the
+selected notebook-10 model against weighted likes and centered all-rating
+profiles, each with a small prespecified grid of dislike penalties. It keeps
+the training-only feature basis, candidate catalog and hybrid weights frozen,
+verifies the original per-user validation metrics, excludes all rated movies,
+and evaluates the same validation-positive users and full denominators.
+
+The notebook displays ratings on a 1–10 scale; MovieLens storage remains
+0.5–5. Graded likes distinguish 8/9/10. Explicit dislikes use 1–4/10; the
+all-centered variant uses 6/10 as neutral, 7–10 as positive, and 1–5 as negative.
+Positive and negative affinities are normalized separately, then a penalty is
+subtracted before adding the frozen IMDb prior once. These are profile-scoring
+experiments, not retraining the collaborative feature basis on dislikes.
+
+Run top-to-bottom with the existing project kernel, or run locally:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/negative_ratings_experiment.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_notebook13.py -v
+```
+
+No API key, new download, or service charge is required. Results, per-user
+comparisons, profile coverage, selected recommendations, examples and provenance
+are saved under
+`data/processed/per_user_chronological_60_20_20_v1/notebook13_negative_ratings/`.
+The notebook also plots the penalty tradeoff. Selection uses validation Recall@10;
+paired user-bootstrap intervals are descriptive and not selection-adjusted.
+Observed low-rating hits are an incomplete secondary diagnostic, with unknown
+movies never treated as dislikes. Test feedback and the app model are unchanged.
+
+The recorded 594-user run tested 15 variants. The original binary-like control
+retained the highest Recall@10 (0.122573). The best nonzero dislike penalty
+(binary likes, penalty 0.25) reached Recall@10 0.120948 and NDCG@10 0.143580,
+versus control NDCG@10 0.143483: a tiny ranking improvement with lower recall.
+All three profile families selected zero penalty under the primary recall
+criterion. This does not establish that negative ratings cannot help with a
+different model or loss; it evaluates these frozen-basis profile variants.
+
+### Like threshold: 7/10 versus 8/10 (notebook 14)
+
+[Notebook 14](notebooks/14_like_threshold_experiment.ipynb) takes the selected
+CF + plots + cast + IMDb model and counts ratings of at least 7/10 (3.5 MovieLens
+stars) as likes. It compares four prespecified variants: the original 8+ model,
+lowering only the user-profile threshold, lowering only the CF training-like
+threshold, and lowering both. Only the collaborative item basis is refit when
+its threshold changes; the candidate catalog, content features and blend
+weights remain fixed. All previously rated movies remain excluded.
+
+Every variant is evaluated at both 8+ and 7+ held-out relevance thresholds.
+Compare models within the same relevance definition and user cohort; changing
+the metric's positive definition changes its denominators. A second table
+holds the original validation-user cohort fixed. The original model must
+reproduce notebook 10's per-user validation metrics before accepting results.
+
+Run the notebook top-to-bottom with the existing project kernel, or run:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/like_threshold_experiment.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_notebook14.py -v
+```
+
+No API calls or new downloads are required. Artifacts are saved under
+`data/processed/per_user_chronological_60_20_20_v1/notebook14_like_threshold/`.
+Results include both evaluation definitions, fixed-cohort comparisons, paired
+user-bootstrap intervals, full recommendation IDs, examples and provenance.
+This is exploratory validation; it does not read test feedback, retune blend
+weights, or update the app's model.
+
+In the recorded run, lowering both thresholds to 7+ did not improve Recall@10.
+With 8+ held-out relevance (594 users), the original model scored 0.122573 and
+the requested 7+ model scored 0.112325 (-8.36% relative). With 7+ relevance
+(598 users), the same comparison was 0.115584 versus 0.109538 (-5.23%).
+The lower training threshold added 7,266 like events and increased CF movie
+coverage from 4,389 to 5,082, but that additional feedback did not translate
+into higher macro recall in this experiment.
+
+### Whole TV series (notebook 15)
+
+[Notebook 15](notebooks/15_tv_series_recommendations.ipynb) extends the best
+Recall@10 hybrid to whole series and mini-series, retaining binary 8+/10 likes.
+It adds a bounded English-language TVmaze page-zero catalog, verified through
+exact IMDb title types. Cast uses official IMDb person IDs; episodes, specials
+and whole series retain distinct identities. Existing MovieLens series are
+not added twice.
+
+New summaries and cast are transformed through the original training-only
+TF-IDF and cast vocabulary/IDF. The movie CF basis, hybrid weights, and IMDb
+prior center stay fixed. New series have zero collaborative rows because no
+individual training histories are available for them. Whole-series ratings
+can still contribute content preferences to movie and TV recommendations.
+Normalization stays anchored to the original unseen catalog, preserving
+original candidate scores.
+
+Prepare metadata once, then run the offline experiment:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/prepare_tv_series.py
+.\.venv\Scripts\python.exe scripts/tv_series_experiment.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_notebook15.py -v
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_tv_series_data.py -v
+```
+
+No paid API is used. The first run streams roughly 1 GB of IMDb data, stores
+only matching subsets, and caches TVmaze metadata separately under
+`data/raw/notebook15_tv_series/`. Reruns verify and reuse hashes. TVmaze
+summaries are attributed under its [CC BY-SA API terms](https://www.tvmaze.com/api);
+IMDb's [non-commercial dataset terms](https://data.imdb.com/non-commercial-datasets/)
+apply to its data.
+
+The notebook reproduces the original benchmark, reports mixed-catalog metrics
+under existing labels, audits the tiny observed TV subset, and compares using
+versus ignoring existing TV likes in affected user profiles. Most new series
+lack held-out ratings, so generated TV recommendations do not establish measured
+TV accuracy. It includes editable personal ratings, examples, feature coverage,
+an empty actual-feedback CSV template and provenance. Outputs are under
+`data/processed/per_user_chronological_60_20_20_v1/notebook15_tv_series/`.
+Test feedback, existing caches and the app model remain unchanged.
+
+The recorded run added 223 series (223 with usable plot features, 188 with
+known cast features) to 6,885 original candidates. Original candidate scores
+were preserved for all 610 training users, and the 594-user control reproduced
+Recall@10 0.122573. The mixed-catalog score remained 0.122573 under the existing
+labels. Exact type classification found 27 whole-series validation likes from
+17 users; the new series mostly lack individual held-out ratings, so this does
+not establish their recommendation accuracy.
+
+The placement audit shows the calibration limitation: new series fill 929 of
+6,100 TV-only recommendation slots, but only 12 mixed-list slots, all for users
+without training likes. No existing personalized profile receives a new series
+in its mixed top 10 with these frozen weights. Use the separate TV list to
+inspect content transfer; mixed-list calibration needs further labeled feedback.
