@@ -197,6 +197,11 @@ button { border: 0; }
 .rating-value { min-height: 48px; display: flex; align-items: center; flex-direction: column; gap: 5px; margin-bottom: 20px; font-size: 11px; color: #7d896e; }
 .rating-value strong { font-size: 17px; font-weight: 600; color: var(--orange); }
 .rating-value strong > span { font-size: 11px; color: #9aa28c; font-weight: 400; }
+.rating-options { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; margin: 24px 0 15px; }
+.rating-option { min-height: 48px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--ink); font-size: 19px; font-weight: 600; transition: background .15s, border-color .15s, color .15s; }
+.rating-option:hover { background: #eee8dc; border-color: #b8b9ab; }
+.rating-option.is-selected { color: white; background: var(--orange); border-color: var(--orange); }
+.rating-option:focus-visible { outline-offset: 3px; }
 .save-rating { width: 100%; gap: 9px; }
 .remove-rating { display: block; margin: 15px auto 0; background: none; padding: 4px; font-size: 10px; color: #969e88; text-decoration: underline; text-underline-offset: 3px; }
 .remove-rating:hover { color: var(--orange); }

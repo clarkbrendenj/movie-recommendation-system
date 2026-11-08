@@ -2,9 +2,13 @@
 
 A movie-rating app powered by the project's selected CF + plots + cast + IMDb
 hybrid. Visitors browse a frozen catalog of 6,885 MovieLens movies; signed-in
-users save private half-star ratings and receive recommendations immediately.
+users save private 1–10 ratings and receive recommendations immediately.
 
 ## Accounts and ratings
+
+The rating interface hides IMDb scores on movie cards and in the rating dialog,
+so users can form their own opinion. IMDb data remains part of the trained
+recommendation model, but its score is not displayed while rating movies.
 
 Hosted authentication is provided by **Sign in with ChatGPT**. Each account's
 stable Site user ID scopes every database read, update, and delete. Ratings live
@@ -12,12 +16,20 @@ in Cloudflare D1 and survive browser/device changes. Personal API responses are
 private and are never shared through caches. The app does not use an LLM or an
 OpenAI API key, and rating/recommendation requests do not consume API credits.
 
-All rated movies are excluded from future recommendations. Ratings of four or
-five stars contribute to the preference profile, following the evaluated model.
+All rated movies are excluded from future recommendations. Ratings of **8–10**
+contribute to the preference profile, following the evaluated model.
 With no liked movies, the app shows training-popularity starter picks, with IMDb
 quality and movie ID used as deterministic secondary ordering. Lower ratings
 exclude movies but do not create a negative preference vector. Rating a movie
 does not retrain the global collaborative model or modify another user's taste.
+
+The app accepts whole-number ratings from 1 to 10. It converts each score to
+the model's original 0.5–5 scale before storage and inference: 1 becomes 0.5,
+8 becomes 4, and 10 becomes 5. Existing stored ratings are preserved and shown
+at twice their original value, so a previous 4.5-star rating appears as 9/10.
+No database migration or model retraining is needed. `GET /api/me` declares
+`ratingScale: 10`; rating writes must include that field to prevent old clients
+from silently submitting ratings on the previous scale.
 
 ## Local development
 
@@ -40,6 +52,7 @@ Checks:
 
 ```powershell
 node lib/recommender.test.mjs
+node lib/rating-scale.test.mjs
 node scripts/api-smoke.mjs
 ```
 

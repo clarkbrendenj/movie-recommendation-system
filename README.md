@@ -7,7 +7,7 @@ personalized recommendations.
 
 [Afterglow](web/README.md) turns the selected CF + plots + cast + IMDb hybrid
 into a movie-rating app. It includes ChatGPT sign-in, private persistent ratings,
-search and genre filters, editable half-star ratings, starter picks for new
+search and genre filters, editable 1–10 ratings, starter picks for new
 users, and personalized recommendations that exclude movies already rated.
 It serves 6,885 movies from the frozen model catalog and makes no LLM API calls.
 
