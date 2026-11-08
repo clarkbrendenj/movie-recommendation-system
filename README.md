@@ -3,6 +3,19 @@
 This project explores how movie ratings can be used to generate
 personalized recommendations.
 
+## Movie app
+
+[Afterglow](web/README.md) turns the selected CF + plots + cast + IMDb hybrid
+into a movie-rating app. It includes ChatGPT sign-in, private persistent ratings,
+search and genre filters, editable half-star ratings, starter picks for new
+users, and personalized recommendations that exclude movies already rated.
+It serves 6,885 movies from the frozen model catalog and makes no LLM API calls.
+
+The [web app](web/) contains the interface, user-scoped D1 APIs, deployment
+configuration, and sparse JavaScript inference. The
+[model exporter](scripts/export_web_model.py) verifies parity with notebook 10
+before emitting portable features. See the app README for local setup and tests.
+
 I am building it to develop practical machine learning and NLP skills,
 with an emphasis on understanding model behavior and evaluating results.
 

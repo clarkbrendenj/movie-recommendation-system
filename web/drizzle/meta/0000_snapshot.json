@@ -1,0 +1,73 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "c40fde4f-d2ed-49d2-875c-5445c0ca3b40",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "ratings": {
+      "name": "ratings",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "movie_id": {
+          "name": "movie_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rating": {
+          "name": "rating",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "ratings_user_id_movie_id_pk": {
+          "columns": [
+            "user_id",
+            "movie_id"
+          ],
+          "name": "ratings_user_id_movie_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ratings_valid_movie": {
+          "name": "ratings_valid_movie",
+          "value": "\"ratings\".\"movie_id\" > 0"
+        },
+        "ratings_valid_value": {
+          "name": "ratings_valid_value",
+          "value": "\"ratings\".\"rating\" >= 0.5 AND \"ratings\".\"rating\" <= 5 AND \"ratings\".\"rating\" * 2 = CAST(\"ratings\".\"rating\" * 2 AS INTEGER)"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

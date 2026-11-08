@@ -1,0 +1,20 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Afterglow: production build",
+			"type": "shell",
+			"command": "Set-Location -LiteralPath 'C:/Users/clark/OneDrive/Documents/Projects/movie-recommendation-system/web'; $env:Path = 'C:/Users/clark/AppData/Local/Temp/vscode-agent-codex-sandbox-mf0hkD/movie-app-tools/node-v22.23.4-win-x64;C:/Program Files/Git/cmd;' + $env:Path; & 'C:/Users/clark/AppData/Local/Temp/vscode-agent-codex-sandbox-mf0hkD/movie-app-tools/node-v22.23.4-win-x64/node.exe' 'C:/Users/clark/.codex/plugins/cache/openai-curated-remote/sites/1.1.4/scripts/build-site.mjs'",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Afterglow: local preview",
+			"type": "shell",
+			"command": "Set-Location -LiteralPath 'C:/Users/clark/OneDrive/Documents/Projects/movie-recommendation-system/web'; $env:Path = 'C:/Users/clark/AppData/Local/Temp/vscode-agent-codex-sandbox-mf0hkD/movie-app-tools/node-v22.23.4-win-x64;C:/Program Files/Git/cmd;' + $env:Path; & 'C:/Users/clark/AppData/Local/Temp/vscode-agent-codex-sandbox-mf0hkD/movie-app-tools/node-v22.23.4-win-x64/node.exe' scripts/run-framework.mjs dev --hostname 127.0.0.1 --port 5173",
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}
