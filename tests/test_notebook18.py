@@ -1,7 +1,9 @@
 """Fixed-budget movie/TV policies: blend normalization, quotas, and ranking targets."""
 
 import ast
+from contextlib import redirect_stdout
 import inspect
+from io import StringIO
 import json
 from pathlib import Path
 import re
@@ -15,7 +17,7 @@ from scipy import sparse
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts import filmaffinity_ranking_policy as policy
-from scripts.filmaffinity_experiment import ranked_indices, ranking_metrics
+from scripts.filmaffinity_experiment import fit_model, ranked_indices, ranking_metrics
 
 
 class TrainingHistoryBinTests(unittest.TestCase):
@@ -211,6 +213,74 @@ class ConfirmedUnitExclusionTests(unittest.TestCase):
         np.testing.assert_array_equal(quality_before, self.model["quality"])
         pd.testing.assert_frame_equal(catalog_before, self.model["catalog"])
         pd.testing.assert_frame_equal(validation_before, self.validation)
+
+
+class EndToEndPolicyTests(unittest.TestCase):
+    def test_all_policies_keep_fixed_cohorts_and_match_persistable_personal_inference(self):
+        ids = [f"m{i:02d}" for i in range(10)] + [f"t{i:02d}" for i in range(10)]
+        catalog = pd.DataFrame({
+            "item_id": ids, "title": ids, "original_title": ids, "year": [2000] * 20,
+            "unit": ["movie"] * 10 + ["whole_series"] * 10, "confidence": ["medium"] * 20,
+            "synopsis": ["Una historia de misterio en la ciudad."] * 10
+                        + ["Una serie de misterio en la ciudad."] * 10,
+            "film_genre": ["['Misterio']"] * 20, "film_cast": ["['Actor One']"] * 20,
+        })
+        events = [("fa:A", "m00", 9), ("fa:A", "t00", 8), ("fa:A", "t01", 2),
+                  ("fa:B", "m01", 8), ("fa:B", "t00", 1),
+                  ("fa:C", "t01", 10), ("fa:C", "m00", 3)]
+        # Neutral observed feedback keeps every fixture title in the train catalog.
+        events += [("fa:catalog_seed", item, 5) for item in ids]
+        train = pd.DataFrame(events, columns=["user_id", "item_id", "rating"])
+        model = fit_model(train, catalog)
+        model["best_personalized_variant"] = {
+            "model": "Synthetic frozen hybrid", "kind": "hybrid", "plot": 0.25,
+            "metadata": 0.25, "quality": 0.1,
+        }
+        validation = pd.DataFrame([
+            ("fa:A", "m02", 8, "movie"), ("fa:A", "t02", 9, "whole_series"),
+            ("fa:A", "missing_tv", 10, "whole_series"), ("fa:A", "t09", 8, "whole_series"),
+            ("fa:B", "m00", 8, "movie"), ("fa:B", "missing_movie", 9, "movie"),
+            ("fa:C", "t00", 8, "whole_series"),
+        ], columns=["user_id", "item_id", "rating", "unit"])
+        model, validation, _ = policy.apply_unit_exclusions(model, validation, ["t09"])
+        policies = policy.policy_grid()
+        with redirect_stdout(StringIO()):
+            board, shelf_board, per_user, shelves, _, coverage, examples = policy.evaluate_policies(
+                model, validation, policies
+            )
+        self.assertEqual(len(policies), 17)
+        self.assertEqual(len(board), 17)
+        self.assertEqual(len(per_user), 17 * 3)
+        self.assertTrue(board.mixed_users.eq(3).all())
+        self.assertTrue(board.movie_users.eq(2).all())
+        self.assertTrue(board.tv_users.eq(2).all())
+        self.assertTrue(shelf_board.tv_users.eq(2).all())
+        self.assertTrue(shelf_board.movie_users.eq(2).all())
+        self.assertEqual(len(shelves), 5 * 3)
+        self.assertTrue(per_user.loc[per_user.user_id.eq("fa:B"), "tv_recall_at_10"].isna().all())
+        self.assertTrue(per_user.loc[per_user.user_id.eq("fa:C"), "movie_recall_at_10"].isna().all())
+        self.assertTrue(per_user.loc[per_user.user_id.eq("fa:B"), "history_bin"].eq("0").all())
+        tv_coverage = coverage.loc[coverage.task.eq("whole_series")].set_index("user_id")
+        self.assertEqual(tv_coverage.loc["fa:A", "positives"], 2)
+        self.assertEqual(tv_coverage.loc["fa:A", "available"], 1)
+        positives = {"fa:A": {"m02", "t02", "missing_tv"},
+                     "fa:B": {"m00", "missing_movie"}, "fa:C": {"t00"}}
+        for chosen in policies:
+            for user, relevant in positives.items():
+                history = train.loc[train.user_id.eq(user) & train.item_id.ne("t09")]
+                ratings = history.set_index("item_id").rating.to_dict()
+                result = policy.recommend_policy({"model": model, "policy": chosen}, ratings)
+                ranked = result.item_id.tolist()
+                self.assertEqual(len(ranked), 10)
+                self.assertEqual(len(set(ranked)), 10)
+                self.assertNotIn("t09", ranked)
+                self.assertTrue(set(ranked).isdisjoint(ratings))
+                saved = examples.loc[examples.policy.eq(chosen["policy"]) & examples.user_id.eq(user)]
+                self.assertEqual(ranked, saved.sort_values("rank").item_id.tolist())
+                metrics = per_user.loc[per_user.policy.eq(chosen["policy"]) & per_user.user_id.eq(user)].iloc[0]
+                self.assertAlmostEqual(metrics.mixed_recall_at_10, len(set(ranked) & relevant) / len(relevant))
+                if chosen["kind"] == "allocated":
+                    self.assertEqual(int(result.unit.eq("whole_series").sum()), chosen["tv_slots"])
 
 
 class NotebookBoundaryTests(unittest.TestCase):

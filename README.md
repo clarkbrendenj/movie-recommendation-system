@@ -498,3 +498,53 @@ TV-positive users falls from 7.26% on the TV-only shelf to 0.44% in the actual
 mixed top ten. Popularity assigns only 0.024% of mixed slots to series. A future
 study should test TV fallbacks for sparse histories and movie/series calibration;
 neither shelf scores nor exposure alone justify replacing the app model.
+
+### TV ranking blends and mixed-list policy (notebook 18)
+
+[Notebook 18](notebooks/18_filmaffinity_tv_ranking_policy.ipynb) reuses the frozen
+FilmAffinity split and fitted basis, then tests the policy used to compose an
+actual ten-title movie/TV list. It makes no paid calls or app changes:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/filmaffinity_ranking_policy.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_notebook18.py -v
+```
+
+A training-only [source-unit review](scripts/filmaffinity_series_spotcheck.py)
+found 12 confirmed season-scoped entries, including independently rated Stranger
+Things seasons. Notebook 18 disables those IDs in profiles and candidates and
+removes their ineligible validation labels uniformly for all policies. It does
+not aggregate season scores into series scores or alter notebooks 16/17. The
+fixed sample yielded eight source-supported whole-series entries, three ambiguous
+entries, and one season entry; expanded marker review covered 204 descriptions.
+Unflagged and ambiguous entries are still provisional, not independently verified.
+
+The original notebook-17 mixed controls are reproduced before cleanup. All
+notebook-18 policies then use the same corrected eligibility: 8,995 movie candidates,
+1,715 series candidates, 4,143 validation-positive users and 972 TV-positive
+users. The original training-user cohort and feature basis are inherited rather
+than refitted; original minimum-history eligibility included now-excluded events.
+
+Movie ranking is fixed at the prior best personalized hybrid. TV ranking blends
+max-scaled unseen-TV popularity and personalization at weights 0, 0.25, 0.5, 1,
+or training-TV-like-count / (count + 5). Each TV choice is crossed with 2, 4 or 6
+TV slots, evenly interleaved within ten total titles. Two corrected mixed-list
+controls complete the 17 policies. The primary objective is the equal mean of
+movie and TV Recall from the actual mixed list; separate shelves, NDCG, exposure,
+coverage and 0/1-4/5+ training-TV-like groups are diagnostics.
+
+The selected policy was a **50/50 TV blend with 6 TV and 4 movie slots**. Its
+movie / TV / overall mixed Recall was **0.024147 / 0.112027 / 0.035297**, compared
+with the corrected hybrid control's **0.047917 / 0.004655 / 0.043512**. TV improves
+at a substantial movie cost. The same blend with 2 TV and 8 movie slots reached
+**0.040924 / 0.052463 / 0.042900**, a useful tradeoff to inspect rather than the
+primary-objective winner. The best observed TV-only shelf used 25% personalization
+and 75% popularity: Recall 0.156498 versus popularity's 0.153394. That small
+validation difference is not an independent accuracy claim.
+
+Outputs and saved-policy settings are under `data/processed/notebook18_filmaffinity/`.
+The notebook reloads the actual selected policy and reproduces per-user metrics
+for three training profiles, then demonstrates an editable new-user profile.
+No deployment is performed, and the reserved test is never read. This remains
+a repeated-validation policy study with provisional units and review-date
+proxies, not a fully retrained clean-series model or a general win over an LLM.
