@@ -39,6 +39,8 @@ the selected IMDb hybrid.
 Notebook 14 tests lowering binary likes from 8/10 to 7/10 in the selected model.
 Notebook 15 extends the selected hybrid to whole TV series using frozen content
 features, with a separate audit of the small observed TV-rating subset.
+Notebook 16 audits public individual-rating sources for whole-series and joint
+movie/TV recommendation experiments.
 
 ## Environment
 
@@ -390,3 +392,109 @@ The placement audit shows the calibration limitation: new series fill 929 of
 without training likes. No existing personalized profile receives a new series
 in its mixed top 10 with these frozen weights. Use the separate TV list to
 inspect content transfer; mixed-list calibration needs further labeled feedback.
+
+### Whole-series ratings source audit (notebook 16)
+
+[Notebook 16](notebooks/16_tv_ratings_dataset_audit.ipynb) audits FilmAffinity,
+MyAnimeList 2020, and Douban MovieData-10M against the app's whole-series rating
+unit. It joins actual individual ratings to metadata, separates seasons and
+episodes, measures shared movie/TV users and history depth, checks date fields,
+and records source identities, access failures and usage evidence.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-audit.txt
+.\.venv\Scripts\python.exe scripts/prepare_ratings_dataset_audit.py
+.\.venv\Scripts\python.exe scripts/ratings_dataset_audit.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_notebook16.py -v
+```
+
+The optional requirements file adds PyArrow to the existing environment. The
+fetcher pins repository revisions, verifies hashes and byte counts, and stores
+inputs separately under `data/raw/notebook16_dataset_audit/`. Its default first
+run retrieves both FilmAffinity Parquet tables (about 450 MB), full MAL metadata
+and the curator's small rating samples, plus Douban documentation and a bounded
+public sample probe. It never accesses the password-gated Douban full archive.
+Use `--offline` to verify existing cache without network requests.
+
+Measured results are saved under `data/processed/notebook16_dataset_audit/`.
+The comparison distinguishes full snapshots, ordered samples, documented totals,
+and inaccessible data. Unit classification is conservative metadata inference;
+movie/series candidates and proposed exact-title/year links need review.
+FilmAffinity review dates are not verified original rating-event timestamps.
+The uploader's license declaration is recorded separately from upstream rights;
+Douban's dataset conditions are separate from its code license. This audit
+neither trains a model nor changes the app or earlier benchmark feedback.
+
+The recorded audit selected **FilmAffinity as the strongest retrieved prototype
+candidate**: 419,827 valid individual scores, including 35,489 ratings on 2,502
+likely whole-series entries from 13,094 users. There are 8,350 users with both
+movie-candidate and series-candidate ratings, including 1,063 with at least five
+of each. These unit counts are metadata inferences; ordinary FilmAffinity movie
+entries are inferred from untagged feature-length records. Known examples
+include Breaking Bad (497 ratings), The Wire (390), and Dark (184).
+
+The MAL audit retrieved all 17,562 metadata rows but only the curator's 499-row
+rating sample (four users); its 57-million-rating population is documented,
+not measured here. TV anime entries can be season-specific and have no rating
+timestamps in the published sample. Douban remains unranked: its public sample
+host returned `[Errno 11001] getaddrinfo failed`, and its full archive is gated.
+A current authorized archive or working public sample URL is needed to measure
+its whole-series coverage. FilmAffinity still needs manual unit review and a
+verified IMDb/TMDB crosswalk before joining its titles to the app's catalog.
+
+### FilmAffinity movie and whole-series model (notebook 17)
+
+[Notebook 17](notebooks/17_filmaffinity_hybrid_recommendations.ipynb) trains a fresh
+FilmAffinity version of the hybrid model using the audited notebook-16 exports.
+It works offline with the existing environment and downloaded data:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/filmaffinity_experiment.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_notebook17.py -v
+```
+
+The retrospective cohort requires at least ten retained ratings and three
+distinct review dates. Whole review-day groups stay together in an approximately
+60/20/20 split. Likes are scores of **8/10 or higher**. The 15-model comparison
+includes popularity, training-only Bayesian quality, content, item collaborative
+filtering, and a prespecified hybrid grid. Training-only Spanish synopsis TF-IDF,
+genres, and normalized cast-name features share FilmAffinity's movie/series IDs.
+The hybrid score is additive: `CF + p*synopsis + m*(genres+cast)/2 + q*quality`.
+CF/content components are scaled by each user's maximum unseen-item score.
+
+Selection maximizes the equal-weight mean of movie-only and series-only macro
+Recall@10. Mixed-catalog Recall/NDCG and separate domain results are also saved.
+Every training-rated item is excluded, including low ratings; unavailable
+validation positives remain in the metric denominators. All training ratings
+contribute to the quality prior, while personalized profiles use likes only.
+
+Outputs, the frozen split/plan, and a reload-verified trained model are saved
+under `data/processed/notebook17_filmaffinity/`. The new reserved test is created
+and integrity-checked but never parsed for model selection. Earlier MovieLens
+feedback and app files are not loaded or changed.
+
+This is an established-user, validation-only study of review-associated scores.
+Review dates are proxies, title-unit labels are provisional, metadata is current,
+and cast names can collide. Its scores cannot be compared directly with the
+earlier MovieLens or LLM experiments. The app model is not automatically replaced.
+
+The recorded run trained on 173,232 ratings from 5,505 users and 10,722 titles
+(8,995 movie candidates, 1,727 whole-series candidates). Best personalized weights
+were `p=0.25, m=0.25, q=0.10`: movie-only Recall@10 0.048873, series-only 0.072629,
+and mixed 0.043430. Plain CF reached 0.046070 / 0.058050 / 0.041024 respectively.
+Training popularity won the balanced separate-shelf objective (0.091496), driven
+by series-only Recall 0.151309; this is not a personalized-model win.
+
+[Post-selection diagnostics](scripts/filmaffinity_diagnostics.py) reproduce both
+frozen winners' mixed and TV-only results against the saved leaderboard and audit
+TV placement without retuning. Run them independently after the experiment:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/filmaffinity_diagnostics.py
+```
+
+The hybrid assigns 7.00% of mixed-list slots to series, but TV Recall for its 985
+TV-positive users falls from 7.26% on the TV-only shelf to 0.44% in the actual
+mixed top ten. Popularity assigns only 0.024% of mixed slots to series. A future
+study should test TV fallbacks for sparse histories and movie/series calibration;
+neither shelf scores nor exposure alone justify replacing the app model.
