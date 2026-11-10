@@ -5,11 +5,16 @@ personalized recommendations.
 
 ## Movie app
 
-[Afterglow](web/README.md) turns the selected CF + plots + cast + IMDb hybrid
-into a movie-rating app. It includes ChatGPT sign-in, private persistent ratings,
-search and genre filters, editable 1–10 ratings, starter picks for new
-users, and personalized recommendations that exclude movies already rated.
-It serves 6,885 movies from the frozen model catalog and makes no LLM API calls.
+[Afterglow](web/README.md) uses separate MovieLens/IMDb movie and FilmAffinity
+whole-series recommendation models. It includes its own accounts, private
+ratings, dedicated movie/series rating queues, watchlists, and Together lists.
+A vertical 1–10 slider saves scores in tenths. It exposes 6,818 film candidates
+and 1,715 series candidates and makes no LLM API calls.
+
+[Deploy the complete app on Cloudflare](web/INDEPENDENT-HOSTING.md), with source
+and a manual deployment workflow on GitHub. GitHub Pages alone cannot run its
+account, database, or recommendation APIs. The existing private Site remains
+separate while independent hosting is set up.
 
 The [web app](web/) contains the interface, user-scoped D1 APIs, deployment
 configuration, and sparse JavaScript inference. The

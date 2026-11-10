@@ -1,0 +1,80 @@
+name: Deploy Afterglow
+
+# Deployments start only when a repository maintainer selects Run workflow.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: afterglow-production-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Validate and deploy to Cloudflare
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: web
+        shell: bash
+    env:
+      CI: "true"
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CF_D1_DATABASE_ID: ${{ vars.CF_D1_DATABASE_ID }}
+      SHARP_IGNORE_GLOBAL_LIBVIPS: "1"
+      WRANGLER_SEND_METRICS: "false"
+      CLOUDFLARE_CF_FETCH_ENABLED: "false"
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.23.4"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Check required hosting settings
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node --input-type=module <<'JS'
+          const required = ["CLOUDFLARE_ACCOUNT_ID", "CF_D1_DATABASE_ID", "CLOUDFLARE_API_TOKEN"];
+          const missing = required.filter(name => !process.env[name]?.trim());
+          if (missing.length) throw new Error(`Missing repository Actions settings: ${missing.join(", ")}`);
+          if (!/^[0-9a-f]{32}$/i.test(process.env.CLOUDFLARE_ACCOUNT_ID)) throw new Error("Invalid CLOUDFLARE_ACCOUNT_ID.");
+          if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(process.env.CF_D1_DATABASE_ID)) throw new Error("Invalid CF_D1_DATABASE_ID.");
+          JS
+
+      - name: Install locked dependencies
+        run: npm ci --include=dev --include=optional --no-audit --no-fund
+
+      - name: Run model, account, migration and collaboration tests
+        run: node --test lib/*.test.mjs
+
+      - name: Check TypeScript
+        run: node node_modules/typescript/bin/tsc --noEmit
+
+      - name: Build the full app
+        run: npm run build
+
+      - name: Prepare independent hosting configuration
+        run: npm run hosting:prepare -- --database-id "$CF_D1_DATABASE_ID" --account-id "$CLOUDFLARE_ACCOUNT_ID" --name afterglow
+
+      - name: Apply pending production database migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node node_modules/wrangler/bin/wrangler.js d1 migrations apply DB --remote --config .independent/wrangler.json
+
+      - name: Deploy the Worker and app assets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node node_modules/wrangler/bin/wrangler.js deploy --config .independent/wrangler.json

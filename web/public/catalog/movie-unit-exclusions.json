@@ -1,0 +1,372 @@
+{
+  "version": 1,
+  "featureItemCount": 6885,
+  "candidateCount": 6818,
+  "unknownTitleTypes": 12,
+  "titleTypeCounts": {
+    "movie": 6571,
+    "short": 49,
+    "tvEpisode": 21,
+    "tvMiniSeries": 43,
+    "tvMovie": 68,
+    "tvSeries": 3,
+    "tvShort": 3,
+    "tvSpecial": 21,
+    "unknown": 12,
+    "video": 94
+  },
+  "excludedItems": [
+    {
+      "movieId": 7396,
+      "imdbId": "tt0070644",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 7646,
+      "imdbId": "tt0259153",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 7669,
+      "imdbId": "tt0112130",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 7762,
+      "imdbId": "tt0080297",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 7841,
+      "imdbId": "tt0287839",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 7842,
+      "imdbId": "tt0142032",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 8580,
+      "imdbId": "tt0099851",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 26528,
+      "imdbId": "tt0088727",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 26587,
+      "imdbId": "tt0092337",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 26614,
+      "imdbId": "tt0094791",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 26649,
+      "imdbId": "tt0096639",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 26838,
+      "imdbId": "tt0108170",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 26849,
+      "imdbId": "tt0108941",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 27251,
+      "imdbId": "tt0207275",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 27611,
+      "imdbId": "tt0314979",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 27708,
+      "imdbId": "tt0340477",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 27751,
+      "imdbId": "tt0355987",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 38304,
+      "imdbId": "tt0367555",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 40697,
+      "imdbId": "tt0105946",
+      "titleType": "tvSeries"
+    },
+    {
+      "movieId": 50740,
+      "imdbId": "tt0058578",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 51562,
+      "imdbId": "tt0106336",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 53883,
+      "imdbId": "tt0430484",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 57772,
+      "imdbId": "tt0070904",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 61406,
+      "imdbId": "tt0472027",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 62336,
+      "imdbId": "tt0279077",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 62836,
+      "imdbId": "tt0871427",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 62970,
+      "imdbId": "tt0910812",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 63433,
+      "imdbId": "tt0387736",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 64167,
+      "imdbId": "tt0233044",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 66934,
+      "imdbId": "tt1227926",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 70521,
+      "imdbId": "tt1117666",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 72982,
+      "imdbId": "tt1461312",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 74282,
+      "imdbId": "tt0092571",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 77177,
+      "imdbId": "tt0884762",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 79299,
+      "imdbId": "tt0874957",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 85780,
+      "imdbId": "tt1701991",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 92475,
+      "imdbId": "tt1955162",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 93006,
+      "imdbId": "tt2033193",
+      "titleType": "tvSeries"
+    },
+    {
+      "movieId": 93040,
+      "imdbId": "tt0098769",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 93988,
+      "imdbId": "tt0417349",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 95717,
+      "imdbId": "tt1820723",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 99532,
+      "imdbId": "tt0230534",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 100553,
+      "imdbId": "tt2092588",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 105250,
+      "imdbId": "tt0432232",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 106642,
+      "imdbId": "tt2779318",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 107410,
+      "imdbId": "tt0086723",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 117192,
+      "imdbId": "tt2986512",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 121035,
+      "imdbId": "tt3132738",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 126430,
+      "imdbId": "tt0374463",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 131724,
+      "imdbId": "tt4299972",
+      "titleType": "tvSeries"
+    },
+    {
+      "movieId": 139130,
+      "imdbId": "tt0465316",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 140359,
+      "imdbId": "tt1413314",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 142115,
+      "imdbId": "tt0296310",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 142366,
+      "imdbId": "tt0643109",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 147374,
+      "imdbId": "tt1998643",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 147376,
+      "imdbId": "tt1672218",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 147378,
+      "imdbId": "tt1337072",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 147380,
+      "imdbId": "tt1321969",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 147382,
+      "imdbId": "tt1061123",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 147384,
+      "imdbId": "tt0827573",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 150548,
+      "imdbId": "tt3845232",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 150596,
+      "imdbId": "tt4701546",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 159817,
+      "imdbId": "tt0795176",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 163527,
+      "imdbId": "tt1694505",
+      "titleType": "tvEpisode"
+    },
+    {
+      "movieId": 170705,
+      "imdbId": "tt0185906",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 171011,
+      "imdbId": "tt5491994",
+      "titleType": "tvMiniSeries"
+    },
+    {
+      "movieId": 174053,
+      "imdbId": "tt3973198",
+      "titleType": "tvEpisode"
+    }
+  ],
+  "sources": {
+    "modelMetadata": {
+      "path": "web/public/model/metadata.json",
+      "sha256": "e4f8246ef4ec6f674d33e3324f9b44998bd4d572b50fc971eed4d233346d6f70"
+    },
+    "movieLensLinks": {
+      "path": "data/raw/ml-latest-small/links.csv",
+      "sha256": "97ad18e4e56a09363c65676b6cb3482ce3e2cea2372a24620c1599c843325f31"
+    },
+    "imdbTitleBasics": {
+      "path": "data/raw/notebook15_tv_series/title.basics.tsv",
+      "sha256": "9eb83d2703c0eaa626e28099719a4b0dc4b5f8c962ef59f9a850e2dc1237c70d"
+    }
+  },
+  "generatorSha256": "3f089ba497319404f0809bd05876bdb801f50b38728b033bf084ce1b9d434ba6",
+  "policy": "Exact linked IMDb tvSeries/tvMiniSeries/tvEpisode IDs are excluded from the film view before top-k/pagination. All frozen feature rows and legacy ratings remain intact.",
+  "benchmark": "Recall@10 0.122573 belongs to the original unfiltered 6,885-item catalog; this film-view filter has not been re-benchmarked."
+}
