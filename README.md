@@ -5,11 +5,12 @@ personalized recommendations.
 
 ## Movie app
 
-[Afterglow](web/README.md) turns the selected CF + plots + cast + IMDb hybrid
-into a movie-rating app. It includes ChatGPT sign-in, private persistent ratings,
-search and genre filters, editable 1–10 ratings, starter picks for new
-users, and personalized recommendations that exclude movies already rated.
-It serves 6,885 movies from the frozen model catalog and makes no LLM API calls.
+[Afterglow](web/README.md) uses the selected MovieLens/IMDb movie model and
+FilmAffinity whole-series model. It includes app-owned accounts, private
+ratings, separate rating queues, watchlists, and Together recommendation lists.
+A vertical 1–10 fader saves scores in tenths; recommendations exclude titles
+already rated. It exposes 6,818 film candidates and 1,715 series candidates and
+makes no LLM API calls. The current Site retains its private hosting access gate.
 
 The [web app](web/) contains the interface, user-scoped D1 APIs, deployment
 configuration, and sparse JavaScript inference. The
@@ -548,3 +549,72 @@ for three training profiles, then demonstrates an editable new-user profile.
 No deployment is performed, and the reserved test is never read. This remains
 a repeated-validation policy study with provisional units and review-date
 proxies, not a fully retrained clean-series model or a general win over an LLM.
+
+### Separate movie and TV rankers (notebook 19)
+
+[Notebook 19](notebooks/19_filmaffinity_separate_rankers.ipynb) compares shared
+history, same-type history in a shared basis, and independently fitted movie/TV
+bases. It refits from 173,022 corrected training ratings, preserves the 12 season
+exclusions, and tests four personal/popularity weights for each fresh family.
+There are 27 ranking settings including frozen notebook-18 shelf controls.
+
+```powershell
+.\.venv\Scripts\python.exe scripts/filmaffinity_separate_rankers.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_notebook19.py -v
+```
+
+Candidates and positive-user cohorts stay fixed: 8,995 movies / 3,830 users and
+1,715 series / 972 users. Type filtering precedes top-ten selection, every rated
+item is excluded, and unavailable relevant items remain in the denominators.
+Empty profiles use training popularity; fallback counts are reported by family.
+Training-only vocabularies, IDF and quality-prior centers are refit by scope.
+Binary item-user cosine rows remain identical for matching training items/users.
+
+The independently fitted movie model led Recall@10 **0.049774 vs 0.048875** for
+the frozen shelf, a small 0.090-percentage-point validation gain. Its descriptive
+paired bootstrap interval spans zero (-0.045 to +0.236 percentage points). TV
+kept the previous 25% personal / 75% popularity shelf at **0.156498**; independent
+TV fitting did not improve it. This does not establish a reliable model gain.
+
+Both means ten movies plus ten series. At the same twenty-title budget, the
+selected shelves reached overall Recall **0.062839**, versus **0.070220** for the
+frozen mixed20 list. TV Recall rose from **0.011343 to 0.156498**, while movie
+Recall fell from **0.077522 to 0.049774**. This is an allocation tradeoff, not an
+overall accuracy win; cross-section NDCG is intentionally not calculated.
+
+Results, fitted selected rankers, controls, history/fallback diagnostics, and
+fixed-alpha comparisons are in `data/processed/notebook19_filmaffinity/`. The
+notebook demonstrates `recommend(..., kind='movie'/'whole_series'/'both')` with
+the saved bundle; Both returns two separately ranked tables. Earlier artifacts,
+the app and reserved test remain unchanged. All findings are exploratory
+validation on provisional source units and review-date proxies.
+
+### App model selection: original movies plus FilmAffinity series
+
+Afterglow uses the original MovieLens CF + plots + cast + IMDb pipeline for
+movies (original validation Recall@10 **0.122573**) and the frozen FilmAffinity
+25% personal / 75% popularity pipeline for whole series (TV-only validation
+Recall@10 **0.156498**). The newer FilmAffinity movie ranker is not substituted
+for the original movie winner. These are separate dataset benchmarks.
+
+The app has Movies, TV series and Both views; Both returns two separately ranked
+shelves. Existing movie ratings and model assets are preserved. Exact IMDb unit
+IDs exclude known series/episodes from new movie discovery without changing the
+original fitted basis. TV candidates retain the 12 confirmed season-unit vetoes.
+Profiles use distinct MovieLens and FilmAffinity IDs, with no guessed title joins:
+TV personalization starts from series ratings until a verified crosswalk exists.
+See [the app README](web/README.md) for running, verification and model limitations.
+
+The next app version adds separate movie/series rating queues, ratings in tenths
+on a vertical 1–10 fader, durable named watchlists, and Together recommendation
+lists for accepted friends. The theater design uses burgundy, warm gold and
+cream. Afterglow accounts own the data; the current private Site retains only
+its hosting access gate. [Independent hosting](web/INDEPENDENT-HOSTING.md) is
+prepared without changing that Site's audience.
+
+Together lists combine the complete rankings from each selected model using a
+blend of the weakest member's percentile and the group's mean percentile.
+Every participant's already-rated titles are excluded. This is a new serving
+policy, not an evaluated improvement to the selected individual models; it has
+not been assigned a Recall score or a new win over an LLM. Movie and series
+rankings stay separate, and saved watchlist items are chosen explicitly.

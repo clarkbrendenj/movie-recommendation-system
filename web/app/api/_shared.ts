@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { getChatGPTUser } from "../chatgpt-auth";
+import { getAppUser } from "../../lib/auth";
 import { getDb } from "../../db";
 import { ratings } from "../../db/schema";
 
@@ -14,17 +14,24 @@ export function json(value: unknown, status = 200) {
   } });
 }
 
-export async function api(handler: () => Promise<Response>) {
+export async function api(handler: () => Promise<Response>, request?: Request) {
   try { return await handler(); }
   catch (error) {
     if (error instanceof ApiError) return json({ error: error.message }, error.status);
     console.error("Afterglow API error", error);
     return json({ error: "We could not complete that request. Please try again." }, 500);
   }
+  finally {
+    // Rejected mutations may return before jsonBody reads their stream. Release
+    // that stream before returning so the Worker proxy can finish the request.
+    if (request?.body && !request.bodyUsed) {
+      try { await request.body.cancel(); } catch { /* The transport may already be closed. */ }
+    }
+  }
 }
 
-export async function requireUser() {
-  const user = await getChatGPTUser();
+export async function requireUser(request?: Request) {
+  const user = await getAppUser(request);
   if (!user) throw new ApiError(401, "Sign in to save your ratings.");
   return user;
 }
