@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { ArrowRight, Bookmark, Check, Copy, LoaderCircle, Plus, RefreshCw, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bookmark, Check, Copy, LoaderCircle, Plus, RefreshCw, Trash2, Users, X } from "lucide-react";
 import { api, EMPTY_FRIENDS, initials, mediaKind, message, titleOf, type Friend, type Friends, type MediaType, type Movie, type Recommendations, type SavedList, type Tab, type User } from "./types";
 import { AuthGate, Busy, Empty, ErrorNotice, Modal, MovieGrid } from "./ui";
+import "./list-view.css";
 
 type ScreenProps = { kind: "watchlist" | "together"; user: User | null; ratings: Map<number, number>; onAuth: () => void; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void; onToast: (text: string) => void; onNavigate: (tab: Tab) => void; revision: number };
 
@@ -58,11 +59,11 @@ function ListsSession({ kind, user, ratings, onRate, onAdd, onToast, onNavigate,
   const [recommendations, setRecommendations] = useState<Recommendations | null>(null), [recLoading, setRecLoading] = useState(false), [recError, setRecError] = useState("");
   const [friends, setFriends] = useState<Friends>(EMPTY_FRIENDS), [friendsLoading, setFriendsLoading] = useState(false), [friendsError, setFriendsError] = useState(""), [friendsRevision, setFriendsRevision] = useState(0);
   const [form, setForm] = useState<"create" | "edit" | null>(null), [editing, setEditing] = useState<SavedList | undefined>(undefined), [confirm, setConfirm] = useState(false), [mutating, setMutating] = useState(false);
-  const alive = useRef(true), loadTurn = useRef(0);
+  const alive = useRef(true), loadTurn = useRef(0), viewHeading = useRef<HTMLHeadingElement>(null), overviewHeading = useRef<HTMLHeadingElement>(null), overviewScroll = useRef(0);
   useEffect(() => { alive.current = true; return () => { alive.current = false; loadTurn.current++; }; }, []);
   const refreshLists = useCallback(async (preferred?: string, signal?: AbortSignal) => {
     const turn = ++loadTurn.current; setLoading(true); setError("");
-    try { const data = await api<{ lists: SavedList[] }>(`/api/lists?kind=${kind}`, { signal }); if (!alive.current || signal?.aborted || turn !== loadTurn.current) return; setLists(data.lists); setSelected(previous => preferred && data.lists.some(list => list.id === preferred) ? preferred : previous && data.lists.some(list => list.id === previous) ? previous : data.lists[0]?.id || null); }
+    try { const data = await api<{ lists: SavedList[] }>(`/api/lists?kind=${kind}`, { signal }); if (!alive.current || signal?.aborted || turn !== loadTurn.current) return; setLists(data.lists); setSelected(previous => preferred && data.lists.some(list => list.id === preferred) ? preferred : previous && data.lists.some(list => list.id === previous) ? previous : null); }
     catch (failure) { if (alive.current && !signal?.aborted && turn === loadTurn.current) setError(message(failure)); }
     finally { if (alive.current && !signal?.aborted && turn === loadTurn.current) setLoading(false); }
   }, [kind]);
@@ -80,7 +81,22 @@ function ListsSession({ kind, user, ratings, onRate, onAdd, onToast, onNavigate,
     if (kind === "together") { setRecLoading(true); api<Recommendations>(`/api/lists/${selected}/recommendations?limit=12`, { signal: controller.signal }).then(data => { if (!controller.signal.aborted) setRecommendations(data); }).catch(failure => { if (!controller.signal.aborted) setRecError(message(failure)); }).finally(() => { if (!controller.signal.aborted) setRecLoading(false); }); }
     return () => controller.abort();
   }, [selected, kind, detailRevision, revision]);
-  function choose(id: string) { setDetail(null); setRecommendations(null); setSelected(id); setConfirm(false); }
+  useEffect(() => {
+    if (!selected) return;
+    window.scrollTo({ top: 0, behavior: "instant" });
+    const frame = requestAnimationFrame(() => viewHeading.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(frame);
+  }, [selected]);
+  function choose(id: string) { overviewScroll.current = window.scrollY; setDetail(null); setRecommendations(null); setSelected(id); setConfirm(false); }
+  function backToLists() {
+    const previous = selected;
+    setSelected(null); setDetail(null); setRecommendations(null); setConfirm(false);
+    requestAnimationFrame(() => {
+      const opener = previous ? document.getElementById("list-card-" + previous) : null;
+      (opener || overviewHeading.current)?.focus({ preventScroll: true });
+      window.scrollTo({ top: overviewScroll.current, behavior: "instant" });
+    });
+  }
   async function removeItem(movie: Movie) {
     if (!selected || mutating) return; setMutating(true);
     try { await api(`/api/lists/${selected}/items?movieId=${movie.movieId}`, { method: "DELETE" }); if (alive.current) { setDetailRevision(value => value + 1); void refreshLists(); onToast("Title removed from this list."); } }
@@ -93,11 +109,80 @@ function ListsSession({ kind, user, ratings, onRate, onAdd, onToast, onNavigate,
   }
   async function deleteOrLeave() {
     if (!selected || mutating) return; setMutating(true);
-    try { await api(`/api/lists/${selected}`, { method: "DELETE" }); if (alive.current) { setConfirm(false); setDetail(null); setRecommendations(null); setSelected(null); void refreshLists(); onToast(detail?.list.isOwner ? "List deleted. Your ratings are unchanged." : "You left the list. Your ratings are unchanged."); } }
+    try { await api(`/api/lists/${selected}`, { method: "DELETE" }); if (alive.current) { backToLists(); void refreshLists(); onToast(detail?.list.isOwner ? "List deleted. Your ratings are unchanged." : "You left the list. Your ratings are unchanged."); } }
     catch (failure) { if (alive.current) onToast(message(failure)); } finally { if (alive.current) setMutating(false); }
   }
   const shown = detail?.list;
-  return <><div className="page-intro"><div><span className="eyebrow">{kind === "together" ? "MORE THAN ONE GOOD TASTE" : "FOR A NIGHT YET TO COME"}</span><h1>{kind === "together" ? "Find your next watch, together." : "Keep a little anticipation."}</h1><p>{kind === "together" ? "A shared selection, with a place for everyone’s taste. Your individual ratings stay private." : "Private lists for the movies and whole series you want to come back to."}</p></div><button className="button burgundy-button primary-button" onClick={() => setForm("create")}><Plus size={17} />{kind === "together" ? "New Together list" : "New watchlist"}</button></div><div className="list-layout"><aside className="list-sidebar"><div className="list-toolbar"><h3>Your lists</h3><span>{lists.length}</span></div>{error ? <ErrorNotice text={error} retry={() => void refreshLists()} /> : loading ? <Busy text="Opening your lists…" /> : lists.length ? <div className="list-grid">{lists.map(list => <button key={list.id} className={`list-card ${selected === list.id ? "active" : ""}`} aria-pressed={selected === list.id} onClick={() => choose(list.id)}><span className="list-card-icon">{kind === "together" ? <Users size={20} /> : <Bookmark size={20} />}</span><strong>{list.name}</strong><span>{list.mediaType === "both" ? "Movies & series" : list.mediaType === "series" ? "Whole TV series" : "Movies"} · {list.itemCount} saved{kind === "together" ? ` · ${list.members.length} members` : ""}</span></button>)}</div> : <p className="list-description">Your first list is waiting for a name.</p>}{kind === "together" && <FriendManager user={user} data={friends} loading={friendsLoading} error={friendsError} onRefresh={() => setFriendsRevision(value => value + 1)} onToast={onToast} />}</aside><section className="list-detail" aria-live="polite">{detailError ? <ErrorNotice text={detailError} retry={() => setDetailRevision(value => value + 1)} /> : detailLoading ? <Busy text="Setting the scene…" /> : shown ? <><div className="list-toolbar"><div><span className="eyebrow">{kind === "together" ? "YOUR SHARED SELECTION" : "YOUR PRIVATE WATCHLIST"}</span><h2>{shown.name}</h2></div><div className="list-controls">{kind === "together" && <button className="icon-button" title="Refresh recommendations" aria-label="Refresh shared recommendations" onClick={() => setDetailRevision(value => value + 1)} disabled={recLoading}><RefreshCw size={17} /></button>}{shown.isOwner && <button className="button outline-button secondary-button" onClick={() => { setEditing(shown); setForm("edit"); }}>Edit list</button>}<button className="icon-button" onClick={() => setConfirm(true)} aria-label={shown.isOwner ? "Delete list" : "Leave list"}><Trash2 size={17} /></button></div></div>{kind === "together" && <><div className="list-members">{shown.members.map(member => <span className="member-row" key={member.userId}><span className="member-avatar">{initials(member.displayName)}</span><span>{member.displayName}{member.userId === user.id ? " (you)" : ""}</span></span>)}</div><p className="list-description">Picks balance everyone’s ranked preferences and leave out titles any member has rated. Movies and series each have their own section.</p>{recError ? <ErrorNotice text={recError} retry={() => setDetailRevision(value => value + 1)} /> : recLoading ? <Busy text="Finding common ground…" /> : <>{recommendations?.sections?.movies && <section className="group-shelf"><h3>Movies for everyone</h3>{recommendations.sections.movies.movies.length ? <MovieGrid movies={recommendations.sections.movies.movies} ratings={ratings} onRate={onRate} onAdd={movie => void saveTogether(movie)} /> : <p className="list-description">No unseen movie candidates are available for this group.</p>}</section>}{recommendations?.sections?.series && <section className="group-shelf"><h3>Whole series for everyone</h3>{recommendations.sections.series.movies.length ? <MovieGrid movies={recommendations.sections.series.movies} ratings={ratings} onRate={onRate} onAdd={movie => void saveTogether(movie)} /> : <p className="list-description">No unseen series candidates are available for this group.</p>}</section>}</>}</>}<div className="list-toolbar"><h3>{kind === "together" ? "Saved for this group" : "Saved for later"}</h3><span>{detail.items.length} titles</span></div>{detail.items.length ? <MovieGrid movies={detail.items} ratings={ratings} onRate={onRate} onAdd={onAdd} onRemove={movie => void removeItem(movie)} /> : <Empty title={kind === "together" ? "Make a plan from your shared picks." : "A good story deserves a spot."} action={kind === "watchlist" ? <button className="button outline-button secondary-button" onClick={() => onNavigate(shown.mediaType === "series" ? "series" : "movies")}>Find something to save <ArrowRight size={16} /></button> : undefined}>{kind === "together" ? "Save a recommendation above to keep it here for everyone. Refreshing your picks never removes saved titles." : "Choose Save on any movie or series to keep it here. A watchlist is a plan, not a rating."}</Empty>}</> : !loading && <Empty title={kind === "together" ? "Your next shared night starts here." : "A place for your next great watch."}>{kind === "together" ? "Exchange friend codes, accept a request, and give your first shared list a name." : "Create a private watchlist, then save titles as you find them."}</Empty>}</section></div>{form && <ListFormDialog kind={kind} user={user} existing={form === "edit" ? editing : undefined} friends={friends.friends} onClose={() => setForm(null)} onComplete={list => { setForm(null); setDetailRevision(value => value + 1); void refreshLists(list.id); onToast("List saved."); }} />}{confirm && shown && <Modal title={shown.isOwner ? "Delete this list?" : "Leave this list?"} onClose={() => setConfirm(false)} busy={mutating}><h2>{shown.isOwner ? "Close this chapter?" : "Leave this shared selection?"}</h2><p>{shown.isOwner ? "This removes the list and its saved titles for all members. Everyone keeps their own ratings." : "You will lose access to this list. Your personal ratings stay with your account."}</p><div className="dialog-actions"><button className="button outline-button secondary-button" onClick={() => setConfirm(false)} disabled={mutating}>Keep it</button><button className="button burgundy-button primary-button" onClick={() => void deleteOrLeave()} disabled={mutating}>{mutating ? <LoaderCircle className="spinning" size={16} /> : <Trash2 size={16} />}{shown.isOwner ? "Delete list" : "Leave list"}</button></div></Modal>}</>;
+  const preview = lists.find(list => list.id === selected);
+  return <>
+    {selected ? <section className="list-focused-view list-detail" aria-labelledby="list-view-title" data-list-view="focused">
+      <div className="list-focus-topbar">
+        <button className="list-back-button" onClick={backToLists}><ArrowLeft size={19} />Back to {kind === "together" ? "Together lists" : "watchlists"}</button>
+        <span className="list-view-badge">{kind === "together" ? "TOGETHER LIST" : "PRIVATE WATCHLIST"}</span>
+      </div>
+      <header className="list-focus-heading">
+        <div><span className="eyebrow">{kind === "together" ? "YOUR SHARED SELECTION" : "SAVED FOR A GOOD NIGHT"}</span>
+          <h1 id="list-view-title" ref={viewHeading} tabIndex={-1}>{shown?.name || preview?.name || "Opening your list…"}</h1>
+          <p>{kind === "together" ? "Recommendations and saved plans for the people on this list." : "Your own collection of movies and whole series to watch later."}</p>
+        </div>
+        {shown && <div className="list-controls">
+          {kind === "together" && <button className="button outline-button secondary-button" onClick={() => setDetailRevision(value => value + 1)} disabled={recLoading}><RefreshCw size={17} />Refresh picks</button>}
+          {shown.isOwner && <button className="button outline-button secondary-button" onClick={() => { setEditing(shown); setForm("edit"); }}>Edit list</button>}
+          <button className="button outline-button secondary-button" onClick={() => setConfirm(true)}><Trash2 size={16} />{shown.isOwner ? "Delete list" : "Leave list"}</button>
+        </div>}
+      </header>
+      {detailError ? <ErrorNotice text={detailError} retry={() => setDetailRevision(value => value + 1)} /> : detailLoading ? <Busy text="Opening this list…" /> : shown && <>
+        {kind === "together" && <>
+          <div className="list-members">{shown.members.map(member => <span className="member-row" key={member.userId}><span className="member-avatar">{initials(member.displayName)}</span><span>{member.displayName}{member.userId === user.id ? " (you)" : ""}</span></span>)}</div>
+          <p className="list-description">Picks balance everyone’s ranked preferences and leave out titles any member has rated. Movies and series each have their own section.</p>
+          {recError ? <ErrorNotice text={recError} retry={() => setDetailRevision(value => value + 1)} /> : recLoading ? <Busy text="Finding common ground…" /> : <>
+            {recommendations?.sections?.movies && <section className="group-shelf"><h2>Movie recommendations for everyone</h2>
+              {recommendations.sections.movies.movies.length ? <MovieGrid movies={recommendations.sections.movies.movies} ratings={ratings} onRate={onRate} onAdd={movie => void saveTogether(movie)} /> : <p className="list-description">No unseen movie candidates are available for this group.</p>}
+            </section>}
+            {recommendations?.sections?.series && <section className="group-shelf"><h2>TV recommendations for everyone</h2>
+              {recommendations.sections.series.movies.length ? <MovieGrid movies={recommendations.sections.series.movies} ratings={ratings} onRate={onRate} onAdd={movie => void saveTogether(movie)} /> : <p className="list-description">No unseen series candidates are available for this group.</p>}
+            </section>}
+          </>}
+        </>}
+        <section className="list-saved-section" aria-label={kind === "together" ? "Saved for this group" : "Saved for later"}>
+          <div className="list-toolbar"><h2>{kind === "together" ? "Saved for this group" : "Saved for later"}</h2><span>{detail.items.length} titles</span></div>
+          {detail.items.length ? <MovieGrid movies={detail.items} ratings={ratings} onRate={onRate} onAdd={onAdd} onRemove={movie => void removeItem(movie)} /> :
+            <Empty title={kind === "together" ? "Make a plan from your shared picks." : "A good story deserves a spot."} action={kind === "watchlist" ? <button className="button outline-button secondary-button" onClick={() => onNavigate(shown.mediaType === "series" ? "series" : "movies")}>Find something to save <ArrowRight size={16} /></button> : undefined}>
+              {kind === "together" ? "Save a recommendation above to keep it here for everyone. Refreshing your picks never removes saved titles." : "Choose Save on any movie or series to keep it here. A watchlist is a plan, not a rating."}
+            </Empty>}
+        </section>
+      </>}
+    </section> : <>
+      <div className="page-intro"><div><span className="eyebrow">{kind === "together" ? "MORE THAN ONE GOOD TASTE" : "FOR A NIGHT YET TO COME"}</span>
+        <h1 ref={overviewHeading} tabIndex={-1}>{kind === "together" ? "Your Together lists." : "Your private watchlists."}</h1>
+        <p>{kind === "together" ? "Open a list to see a dedicated selection for everyone watching. Individual ratings stay private." : "Open a list to see the movies and whole series you saved for later."}</p>
+      </div><button className="button burgundy-button primary-button" onClick={() => setForm("create")}><Plus size={17} />{kind === "together" ? "New Together list" : "New watchlist"}</button></div>
+      <div className={"list-overview-layout" + (kind === "watchlist" ? " is-private" : "")}>
+        <section className="list-overview" aria-label="Your saved lists">
+          <div className="list-toolbar"><h2>Your lists</h2><span>{lists.length}</span></div>
+          {error ? <ErrorNotice text={error} retry={() => void refreshLists()} /> : loading ? <Busy text="Opening your lists…" /> : lists.length ? <div className="list-grid">
+            {lists.map(list => <button key={list.id} id={"list-card-" + list.id} className="list-card list-open-card" aria-label={"Open " + list.name} onClick={() => choose(list.id)}>
+              <span className="list-card-icon">{kind === "together" ? <Users size={22} /> : <Bookmark size={22} />}</span>
+              <strong>{list.name}</strong>
+              <span>{list.mediaType === "both" ? "Movies & series" : list.mediaType === "series" ? "Whole TV series" : "Movies"} · {list.itemCount} saved{kind === "together" ? " · " + list.members.length + " members" : ""}</span>
+              <span className="list-open-label">Open list <ArrowRight size={17} /></span>
+            </button>)}
+          </div> : <Empty title={kind === "together" ? "Your next shared night starts here." : "A place for your next great watch."}>
+            {kind === "together" ? "Exchange friend codes, accept a request, and give your first shared list a name." : "Create a private watchlist, then save titles as you find them."}
+          </Empty>}
+        </section>
+        {kind === "together" && <aside className="list-overview-friends"><FriendManager user={user} data={friends} loading={friendsLoading} error={friendsError} onRefresh={() => setFriendsRevision(value => value + 1)} onToast={onToast} /></aside>}
+      </div>
+    </>}
+    {form && <ListFormDialog kind={kind} user={user} existing={form === "edit" ? editing : undefined} friends={friends.friends} onClose={() => setForm(null)} onComplete={list => { setForm(null); setDetailRevision(value => value + 1); void refreshLists(list.id); onToast("List saved."); }} />}
+    {confirm && shown && <Modal title={shown.isOwner ? "Delete this list?" : "Leave this list?"} onClose={() => setConfirm(false)} busy={mutating}>
+      <h2>{shown.isOwner ? "Close this chapter?" : "Leave this shared selection?"}</h2>
+      <p>{shown.isOwner ? "This removes the list and its saved titles for all members. Everyone keeps their own ratings." : "You will lose access to this list. Your personal ratings stay with your account."}</p>
+      <div className="dialog-actions"><button className="button outline-button secondary-button" onClick={() => setConfirm(false)} disabled={mutating}>Keep it</button>
+        <button className="button burgundy-button primary-button" onClick={() => void deleteOrLeave()} disabled={mutating}>{mutating ? <LoaderCircle className="spinning" size={16} /> : <Trash2 size={16} />}{shown.isOwner ? "Delete list" : "Leave list"}</button>
+      </div>
+    </Modal>}
+  </>;
 }
 
 export function AddToListDialog({ movie, onClose, onAdded }: { movie: Movie; onClose: () => void; onAdded: () => void }) {

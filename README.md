@@ -5,12 +5,25 @@ personalized recommendations.
 
 ## Movie app
 
+<<<<<<< HEAD
 [Afterglow](web/README.md) uses the selected MovieLens/IMDb movie model and
 FilmAffinity whole-series model. It includes app-owned accounts, private
 ratings, separate rating queues, watchlists, and Together recommendation lists.
 A vertical 1–10 fader saves scores in tenths; recommendations exclude titles
 already rated. It exposes 6,818 film candidates and 1,715 series candidates and
 makes no LLM API calls. The current Site retains its private hosting access gate.
+=======
+[Afterglow](web/README.md) uses separate MovieLens/IMDb movie and FilmAffinity
+whole-series recommendation models. It includes its own accounts, private
+ratings, dedicated movie/series rating queues, watchlists, and Together lists.
+A vertical 1–10 slider saves scores in tenths. It exposes 6,818 film candidates
+and 1,715 series candidates and makes no LLM API calls.
+
+[Deploy the complete app on Cloudflare](web/INDEPENDENT-HOSTING.md), with source
+and a manual deployment workflow on GitHub. GitHub Pages alone cannot run its
+account, database, or recommendation APIs. The existing private Site remains
+separate while independent hosting is set up.
+>>>>>>> b79b9f7f8a1f21b4d21df23b977bae847eba35d9
 
 The [web app](web/) contains the interface, user-scoped D1 APIs, deployment
 configuration, and sparse JavaScript inference. The

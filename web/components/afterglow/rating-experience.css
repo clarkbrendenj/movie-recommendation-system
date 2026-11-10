@@ -1,0 +1,61 @@
+.poster .poster-photo { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#181213; z-index:6; }
+.rating-title-details { margin:13px 0 17px; color:#69564b; font-size:11px; line-height:1.7; }
+.rating-title-details > div { display:grid; grid-template-columns:59px minmax(0,1fr); gap:9px; margin-top:5px; }
+.rating-title-details dt { color:#927448; font-size:10px; }
+.rating-title-details dd { margin:0; text-wrap:pretty; }
+.title-metadata-credit { font-size:8px; color:#8e7b65; line-height:1.7; margin:16px 0 0; }
+.title-metadata-credit a { text-underline-offset:3px; }
+.rating-composition.rating-queue-composition { grid-template-columns:minmax(190px,270px) 80px minmax(0,1fr) 100px; gap:21px; }
+.rating-queue-composition > .rating-art { grid-column:1; grid-row:1; }
+.rating-queue-composition > .rating-fader { grid-column:2; grid-row:1; }
+.rating-queue-composition > .rating-story { grid-column:3; grid-row:1; padding-left:2px; }
+.save-next-control { grid-column:4; grid-row:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; align-self:center; width:100%; min-height:155px; padding:17px 8px; background:var(--burgundy,#571c2b); color:var(--cream,#fffaf0); border:1px solid #946347; border-radius:4px; box-shadow:0 5px 12px #2c101a18,inset 0 0 0 3px #c7a46a1c; transition:background .15s,transform .15s; touch-action:manipulation; }
+.save-next-control:hover:not(:disabled) { background:#733044; transform:translateX(2px); }
+.save-next-control:active:not(:disabled) { transform:translateX(3px); }
+.save-next-control strong { font-size:12px; line-height:1.4; font-weight:600; white-space:nowrap; }
+.save-next-control > span { font:10px "Courier New",monospace; color:#e2c79e; font-variant-numeric:tabular-nums; }
+.save-next-control:disabled { opacity:.7; }
+.rating-queue-composition .queue-actions { margin-top:15px; }
+@media(max-width:1100px) {
+  .rating-composition.rating-queue-composition { grid-template-columns:minmax(170px,230px) 64px minmax(0,1fr) 85px; gap:15px; }
+  .rating-queue-composition .rating-story h2 { font-size:27px; }
+  .rating-queue-composition .queue-actions { grid-template-columns:1fr; gap:7px; }
+  .rating-queue-composition .queue-actions .button { min-height:36px; }
+  .save-next-control { min-height:143px; }
+  .save-next-control strong { font-size:10px; }
+}
+@media(max-width:850px) {
+  .rating-composition.rating-queue-composition { grid-template-columns:minmax(0,1fr) 78px 100px; gap:22px; }
+  .rating-queue-composition > .rating-art { max-width:310px; justify-self:center; width:100%; }
+  .rating-queue-composition > .rating-story { grid-column:1/-1; grid-row:2; padding:8px 0 0; }
+  .rating-queue-composition > .save-next-control { grid-column:3; grid-row:1; }
+  .rating-queue-composition > .rating-fader { max-height:410px; }
+  .rating-queue-composition .fader-rail { height:clamp(180px,35vw,285px); }
+  .rating-queue-composition .rating-story h2 { font-size:32px; }
+  .rating-queue-composition .queue-actions { grid-template-columns:1fr 1fr; }
+  .rating-queue-composition .queue-actions .button { min-height:43px; }
+  .rating-queue-composition .rating-expression { margin:20px 0 18px; }
+  .rating-queue-composition .rating-expression strong { font-size:58px; }
+  .save-next-control { min-height:155px; }
+  .save-next-control strong { font-size:12px; }
+}
+@media(max-width:560px) {
+  .rating-composition.rating-queue-composition { grid-template-columns:minmax(0,1fr) 53px 76px; gap:12px; }
+  .rating-queue-composition .rating-fader { gap:9px; padding:0; }
+  .rating-queue-composition .fader-rail { height:clamp(140px,45vw,225px); }
+  .rating-queue-composition .fader-end span { font-size:6px; }
+  .rating-queue-composition .fader-end { font-size:14px; }
+  .rating-queue-composition .rating-story h2 { font-size:29px; }
+  .rating-queue-composition .rating-title-details { font-size:11px; }
+  .save-next-control { min-height:125px; padding:13px 5px; gap:9px; }
+  .save-next-control > svg { width:31px; height:31px; }
+  .save-next-control strong { font-size:10px; }
+  .save-next-control > span { font-size:9px; }
+}
+@media(max-width:380px) {
+  .rating-composition.rating-queue-composition { grid-template-columns:minmax(0,1fr) 46px 67px; gap:9px; }
+  .rating-queue-composition .fader-rail { height:140px; }
+  .save-next-control { min-height:115px; }
+  .save-next-control strong { font-size:9px; }
+}
+@media(prefers-reduced-motion:reduce) { .save-next-control { transition:none; }.save-next-control:hover:not(:disabled),.save-next-control:active:not(:disabled) { transform:none; } }
