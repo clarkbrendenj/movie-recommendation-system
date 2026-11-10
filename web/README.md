@@ -189,9 +189,42 @@ on title details. The JSON overlay is public and may be reused under the
 applicable source terms; its TVmaze-derived fields retain that license.
 
 Artwork falls back to the existing theater-style CSS cover when unavailable
-or when an image fails. Movie posters need a separate provider connection
-(for example, a free non-commercial TMDB API account); no paid service or key
-is enabled by this update. Cast, crew, and season details appear when known.
+or when an image fails. Cast, crew, and season details appear when known.
+
+### Optional TMDB connection
+
+TMDB provides movie and TV posters and richer credits after the owner connects
+an API Read Access Token. The token is an encrypted Cloudflare Worker secret
+named `TMDB_API_READ_TOKEN`, never a client environment variable or a file in
+this repository. Friends continue using their ordinary Afterglow accounts.
+
+Create a free non-commercial developer account at
+[TMDB](https://www.themoviedb.org/signup), open Settings → API, and obtain the
+**API Read Access Token**, rather than the shorter API key. From the original
+project root in your own terminal, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\web\scripts\connect-tmdb.ps1
+```
+
+Paste the token only into the hidden terminal prompt. The connector verifies
+TMDB access, checks this exact Afterglow account/Worker/database destination,
+and stores the token using Wrangler's normal existing OAuth sign-in. It never
+puts the token in arguments, environment variables, logs, or local files.
+Refresh the app after the terminal reports success. Until then, TVmaze and the
+existing CSS covers continue working. No payment plan is enabled by this step.
+
+The public `/api/title-details?ids=...` route accepts up to six known catalog
+IDs per request. It reads small exact-identity shards, requests only metadata,
+and caches sanitized public fields for a week (unmatched identities for six
+hours). Movie lookups use authoritative MovieLens IMDb/TMDB links; conflicting
+IMDb identities are rejected. TV lookups require one exact title/first-air-year
+match. Whole-series aggregate credits are used. No user ratings, cookies, or
+account identities are sent to TMDB, and provider scores never enter responses
+or the rating UI. Provider failures keep the app's existing metadata fallback.
+The visible Credits section uses TMDB's approved logo and attribution notice
+when the connection is configured. Movie and series model assets and ranking
+weights remain unchanged.
 
 To regenerate display data in the original project checkout with its existing
 Python environment and cached raw data:

@@ -1,0 +1,49 @@
+.tmdb-credit {
+  grid-column:1/-1;
+  display:flex;
+  align-items:center;
+  gap:25px;
+  margin-top:16px;
+  padding-top:20px;
+  border-top:1px solid #d4bd99;
+  color:#6e5849;
+}
+.tmdb-credit-brand {
+  display:flex;
+  align-items:center;
+  gap:18px;
+  flex-shrink:0;
+}
+.tmdb-credit h2 {
+  margin:0;
+  font:11px/1.6 "Courier New",monospace;
+  letter-spacing:1.3px;
+  text-transform:uppercase;
+  color:#79582f;
+}
+.tmdb-credit-brand a {
+  display:block;
+  width:78px;
+  flex-shrink:0;
+}
+.tmdb-credit-brand img {
+  display:block;
+  width:100%;
+  height:auto;
+}
+.tmdb-credit > p {
+  margin:0;
+  max-width:520px;
+  font-size:11px;
+  line-height:1.8;
+}
+@media(max-width:560px) {
+  .tmdb-credit {
+    flex-direction:column;
+    align-items:flex-start;
+    gap:15px;
+    padding-top:19px;
+  }
+  .tmdb-credit-brand { gap:21px; }
+  .tmdb-credit > p { font-size:11px; }
+}

@@ -1,12 +1,61 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { titleOf, type Movie, type TitleDetails } from './types';
 import { selectTvmazeMatch, tvmazeDisplayDetails } from '../../lib/title-details.mjs';
 
 type Catalog = { version: number; items: Record<string, TitleDetails> };
 let catalog: Catalog | undefined;
 let pending: Promise<Catalog> | undefined;
+let tmdbConfigured: boolean | null = null, tmdbFlush: ReturnType<typeof setTimeout> | undefined, tmdbLoading = false;
+const tmdbListeners = new Set<() => void>();
+const tmdbResults = new Map<number, TitleDetails | null>();
+const tmdbPending = new Map<number, Promise<TitleDetails | null>>();
+const tmdbQueue = new Map<number, (details: TitleDetails | null) => void>();
+
+function setTmdbConfigured(value: boolean) {
+  if (value === tmdbConfigured) return;
+  tmdbConfigured = value;
+  for (const listener of tmdbListeners) listener();
+}
+const subscribeTmdb = (listener: () => void) => { tmdbListeners.add(listener); return () => { tmdbListeners.delete(listener); }; };
+export function useTmdbEnabled() { return useSyncExternalStore(subscribeTmdb, () => tmdbConfigured === true, () => false); }
+
+async function flushTmdb() {
+  tmdbFlush = undefined;
+  if (tmdbLoading || !tmdbQueue.size) return;
+  tmdbLoading = true;
+  const group = [...tmdbQueue.entries()].slice(0, 6);
+  for (const [id] of group) tmdbQueue.delete(id);
+  try {
+    const response = await fetch(`/api/title-details?ids=${group.map(([id]) => id).join(',')}`, { credentials: 'omit', signal: AbortSignal.timeout(16000) });
+    if (!response.ok) throw new Error('Artwork is unavailable.');
+    const value = await response.json() as { configured: boolean; unavailable?: boolean; items: Record<string, TitleDetails> };
+    if (typeof value.configured !== 'boolean' || !value.items) throw new Error('Invalid artwork response.');
+    if (value.configured || !value.unavailable) setTmdbConfigured(value.configured);
+    for (const [id, resolve] of group) { const item = value.items[String(id)] || null; if (item || !value.unavailable) tmdbResults.set(id, item); resolve(item); }
+    if (!value.configured && !value.unavailable) {
+      for (const [id, resolve] of tmdbQueue) { tmdbResults.set(id, null); resolve(null); }
+      tmdbQueue.clear();
+    }
+  } catch {
+    for (const [, resolve] of group) resolve(null);
+  } finally {
+    tmdbLoading = false;
+    if (tmdbQueue.size) tmdbFlush = setTimeout(() => void flushTmdb(), 35);
+  }
+}
+
+function tmdbDetails(id: number): Promise<TitleDetails | null> {
+  if (tmdbResults.has(id)) return Promise.resolve(tmdbResults.get(id) || null);
+  if (tmdbConfigured === false) return Promise.resolve(null);
+  const existing = tmdbPending.get(id);
+  if (existing) return existing;
+  const task = new Promise<TitleDetails | null>(resolve => { tmdbQueue.set(id, resolve); }).finally(() => { tmdbPending.delete(id); });
+  tmdbPending.set(id, task);
+  if (!tmdbFlush && !tmdbLoading) tmdbFlush = setTimeout(() => void flushTmdb(), 35);
+  return task;
+}
 const seriesDetails = new Map<number, TitleDetails | null>();
 const seriesPending = new Map<number, Promise<TitleDetails | null>>();
 // One bounded public request at a time, shared by the grid and rating editor.
@@ -46,7 +95,7 @@ function enrichSeries(movie: Movie): Promise<TitleDetails | null> {
       match = selectTvmazeMatch(candidates, target);
     }
     if (!match) { seriesDetails.set(movie.movieId, null); return null; }
-    // A poster can appear promptly; a later render adds known, aired seasons.
+    // Retain verified artwork even when season information is unavailable.
     let seasons: unknown = null;
     try { seasons = await publicTvmaze(`/shows/${match.id}/seasons`); } catch { /* Preserve the verified artwork even if this optional lookup fails. */ }
     const details = tvmazeDisplayDetails(match, seasons);
@@ -73,6 +122,13 @@ function loadCatalog() {
 export function useTitleDetails(movie: Movie): Movie {
   const [details, setDetails] = useState(catalog);
   const [online, setOnline] = useState<{ movieId: number; details: TitleDetails } | null>(null);
+  const [tmdb, setTmdb] = useState<{ movieId: number; details: TitleDetails | null } | null>(null);
+  useEffect(() => {
+    if (movie.mediaType === 'other') return;
+    let alive = true;
+    void tmdbDetails(movie.movieId).then(value => { if (alive) setTmdb({ movieId: movie.movieId, details: value }); });
+    return () => { alive = false; };
+  }, [movie.movieId, movie.mediaType]);
   useEffect(() => {
     if (catalog) { setDetails(catalog); return; }
     let alive = true;
@@ -81,11 +137,13 @@ export function useTitleDetails(movie: Movie): Movie {
   }, []);
   const overlay = details?.items[String(movie.movieId)];
   const enriched = overlay ? { ...movie, ...overlay, movieId: movie.movieId, mediaType: movie.mediaType } : movie;
+  const preferred = tmdb?.movieId === movie.movieId && tmdb.details ? { ...enriched, ...tmdb.details } : enriched;
   useEffect(() => {
-    if (!details || enriched.mediaType !== 'series' || !enriched.year || (enriched.posterUrl && enriched.seasonCount)) return;
+    if (!details || tmdb?.movieId !== movie.movieId || preferred.mediaType !== 'series' || !preferred.year || (preferred.posterUrl && preferred.seasonCount)) return;
     let alive = true;
-    void enrichSeries(enriched).then(value => { if (alive && value) setOnline({ movieId: movie.movieId, details: value }); }).catch(() => {});
+    void enrichSeries(preferred).then(value => { if (alive && value) setOnline({ movieId: movie.movieId, details: value }); }).catch(() => {});
     return () => { alive = false; };
-  }, [details, movie.movieId, enriched.mediaType, enriched.year, enriched.posterUrl, enriched.seasonCount]);
-  return online?.movieId === movie.movieId ? { ...enriched, ...online.details } : enriched;
+  }, [details, tmdb, movie.movieId, preferred.mediaType, preferred.year, preferred.posterUrl, preferred.seasonCount]);
+  const withFallback = online?.movieId === movie.movieId ? { ...enriched, ...online.details } : enriched;
+  return tmdb?.movieId === movie.movieId && tmdb.details ? { ...withFallback, ...tmdb.details } : withFallback;
 }

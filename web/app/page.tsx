@@ -6,6 +6,8 @@ import { api, initials, message, type Account, type Movie, type Tab } from "../c
 import { AuthDialog, Busy, ErrorNotice } from "../components/afterglow/ui";
 import { DiscoverScreen, HistoryScreen, RatingDialog, RatingScreen } from "../components/afterglow/views";
 import { AddToListDialog, ListsScreen } from "../components/afterglow/lists";
+import { useTmdbEnabled } from "../components/afterglow/metadata";
+import { TmdbCredit } from "../components/afterglow/TmdbCredit";
 
 const NAV = [
   { id: 'movies', label: 'Movie recommendations', icon: Film },
@@ -17,6 +19,7 @@ const NAV = [
 ] as const;
 
 export default function Home() {
+  const tmdbEnabled = useTmdbEnabled();
   const [tab, setTab] = useState<Tab>('movies'), [account, setAccount] = useState<Account | null>(null), [accountLoading, setAccountLoading] = useState(true), [accountError, setAccountError] = useState('');
   const [authOpen, setAuthOpen] = useState(false), [editor, setEditor] = useState<Movie | null>(null), [addTitle, setAddTitle] = useState<Movie | null>(null), [revision, setRevision] = useState(0), [toast, setToast] = useState(''), [loggingOut, setLoggingOut] = useState(false);
   const generation = useRef(0), currentUserId = useRef<string | null>(null), profile = useRef<HTMLDetailsElement>(null);
@@ -67,7 +70,7 @@ export default function Home() {
         {tab === 'history' && <HistoryScreen key={`${accountKey}:history`} user={user} ratings={ratings} revision={revision} onAuth={signIn} onRate={setEditor} onAdd={addToList} />}
       </div>}
     </main>
-    <footer className="house-footer"><div className="footer-inner"><span className="footer-wordmark">afterglow <span>✦</span></span><p>A little less scrolling. A little more cinema.</p><div className="footer-sources">Personal, non-commercial use · Catalogs &amp; research: <a href="https://grouplens.org/datasets/movielens/" target="_blank" rel="noreferrer">MovieLens</a>, <a href="https://developer.imdb.com/non-commercial-datasets/" target="_blank" rel="noreferrer">IMDb</a> &amp; <a href="https://huggingface.co/datasets/naim-prog/filmaffinity-reviews-info" target="_blank" rel="noreferrer">FilmAffinity data</a>. TV metadata &amp; artwork: <a href="https://www.tvmaze.com" target="_blank" rel="noreferrer">TVmaze</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA</a>).</div></div></footer>
+    <footer className="house-footer"><div className="footer-inner"><span className="footer-wordmark">afterglow <span>✦</span></span><p>A little less scrolling. A little more cinema.</p><div className="footer-sources">Personal, non-commercial use · Catalogs &amp; research: <a href="https://grouplens.org/datasets/movielens/" target="_blank" rel="noreferrer">MovieLens</a>, <a href="https://developer.imdb.com/non-commercial-datasets/" target="_blank" rel="noreferrer">IMDb</a> &amp; <a href="https://huggingface.co/datasets/naim-prog/filmaffinity-reviews-info" target="_blank" rel="noreferrer">FilmAffinity data</a>. TV metadata &amp; artwork: <a href="https://www.tvmaze.com" target="_blank" rel="noreferrer">TVmaze</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA</a>).</div><TmdbCredit enabled={tmdbEnabled} /></div></footer>
     {toast && <div className="toast" role="status"><Star size={17} /><span>{toast}</span><button className="icon-button" onClick={() => setToast('')} aria-label="Dismiss message"><X size={17} /></button></div>}
     {authOpen && <AuthDialog key={`auth:${accountKey}`} onClose={() => setAuthOpen(false)} onComplete={signedIn} />}
     {editor && <RatingDialog key={`${accountKey}:${editor.movieId}`} movie={editor} initial={ratings.get(editor.movieId) ?? 7} hasRating={ratings.has(editor.movieId)} user={user} onClose={() => setEditor(null)} onAuth={signIn} onSaved={saved} onAdd={() => addToList(editor)} />}
