@@ -8,8 +8,8 @@ import { DiscoverScreen, HistoryScreen, RatingDialog, RatingScreen } from "../co
 import { AddToListDialog, ListsScreen } from "../components/afterglow/lists";
 
 const NAV = [
-  { id: 'movies', label: 'Movies', icon: Film },
-  { id: 'series', label: 'TV series', icon: MonitorPlay },
+  { id: 'movies', label: 'Movie recommendations', icon: Film },
+  { id: 'series', label: 'TV recommendations', icon: MonitorPlay },
   { id: 'rate-movies', label: 'Rate movies', icon: Star },
   { id: 'rate-series', label: 'Rate series', icon: Star },
   { id: 'watchlists', label: 'Watchlists', icon: Bookmark },
@@ -19,10 +19,10 @@ const NAV = [
 export default function Home() {
   const [tab, setTab] = useState<Tab>('movies'), [account, setAccount] = useState<Account | null>(null), [accountLoading, setAccountLoading] = useState(true), [accountError, setAccountError] = useState('');
   const [authOpen, setAuthOpen] = useState(false), [editor, setEditor] = useState<Movie | null>(null), [addTitle, setAddTitle] = useState<Movie | null>(null), [revision, setRevision] = useState(0), [toast, setToast] = useState(''), [loggingOut, setLoggingOut] = useState(false);
-  const generation = useRef(0), profile = useRef<HTMLDetailsElement>(null);
+  const generation = useRef(0), currentUserId = useRef<string | null>(null), profile = useRef<HTMLDetailsElement>(null);
   const refreshAccount = useCallback(async () => {
     const turn = ++generation.current;
-    try { const result = await api<Account>('/api/me'); if (turn === generation.current) { setAccount(result); setAccountError(''); } }
+    try { const result = await api<Account>('/api/me'); if (turn === generation.current) { currentUserId.current = result.user?.id || null; setAccount(result); setAccountError(''); } }
     catch (failure) { if (turn === generation.current) setAccountError(message(failure)); throw failure; }
     finally { if (turn === generation.current) setAccountLoading(false); }
   }, []);
@@ -33,11 +33,25 @@ export default function Home() {
   const navigate = useCallback((next: Tab) => { setTab(next); if (profile.current) profile.current.open = false; window.scrollTo({ top: 0, behavior: 'smooth' }); }, []);
   function signIn() { setEditor(null); setAddTitle(null); setAuthOpen(true); if (profile.current) profile.current.open = false; }
   function addToList(movie: Movie) { if (!user) { signIn(); return; } setEditor(null); setAddTitle(movie); }
-  async function saved() { await refreshAccount(); setRevision(value => value + 1); }
+  async function saved(change?: { movieId: number; rating: number | null }) {
+    if (change) {
+      // The PUT/DELETE already succeeded. Update this account immediately and
+      // invalidate older profile responses without delaying the next title.
+      const ownerId = user?.id;
+      if (!ownerId || currentUserId.current !== ownerId) return;
+      generation.current++;
+      setAccount(previous => previous?.user?.id === ownerId ? { ...previous,
+        ratings: [...previous.ratings.filter(entry => entry.movieId !== change.movieId),
+          ...(change.rating === null ? [] : [{ movieId: change.movieId, rating: change.rating }])] } : previous);
+      setAccountError(''); setAccountLoading(false); setRevision(value => value + 1);
+      return;
+    }
+    await refreshAccount(); setRevision(value => value + 1);
+  }
   async function signedIn() { setEditor(null); setAddTitle(null); await saved(); setToast('Welcome to your picture house.'); }
   async function logout() {
     if (loggingOut) return; setLoggingOut(true);
-    try { await api('/api/auth/logout', { method: 'POST', body: '{}' }); setEditor(null); setAddTitle(null); setAccount(null); await saved(); setToast('You’re signed out. See you at the next showing.'); }
+    try { await api('/api/auth/logout', { method: 'POST', body: '{}' }); generation.current++; currentUserId.current = null; setEditor(null); setAddTitle(null); setAccount(null); await saved(); setToast('You’re signed out. See you at the next showing.'); }
     catch (failure) { setToast(message(failure)); }
     finally { setLoggingOut(false); if (profile.current) profile.current.open = false; }
   }
@@ -53,7 +67,7 @@ export default function Home() {
         {tab === 'history' && <HistoryScreen key={`${accountKey}:history`} user={user} ratings={ratings} revision={revision} onAuth={signIn} onRate={setEditor} onAdd={addToList} />}
       </div>}
     </main>
-    <footer className="house-footer"><div className="footer-inner"><span className="footer-wordmark">afterglow <span>✦</span></span><p>A little less scrolling. A little more cinema.</p><div className="footer-sources">Personal, non-commercial use · Catalogs &amp; research: <a href="https://grouplens.org/datasets/movielens/" target="_blank" rel="noreferrer">MovieLens</a>, <a href="https://developer.imdb.com/non-commercial-datasets/" target="_blank" rel="noreferrer">IMDb</a> &amp; <a href="https://huggingface.co/datasets/naim-prog/filmaffinity-reviews-info" target="_blank" rel="noreferrer">FilmAffinity data</a>.</div></div></footer>
+    <footer className="house-footer"><div className="footer-inner"><span className="footer-wordmark">afterglow <span>✦</span></span><p>A little less scrolling. A little more cinema.</p><div className="footer-sources">Personal, non-commercial use · Catalogs &amp; research: <a href="https://grouplens.org/datasets/movielens/" target="_blank" rel="noreferrer">MovieLens</a>, <a href="https://developer.imdb.com/non-commercial-datasets/" target="_blank" rel="noreferrer">IMDb</a> &amp; <a href="https://huggingface.co/datasets/naim-prog/filmaffinity-reviews-info" target="_blank" rel="noreferrer">FilmAffinity data</a>. TV metadata &amp; artwork: <a href="https://www.tvmaze.com" target="_blank" rel="noreferrer">TVmaze</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA</a>).</div></div></footer>
     {toast && <div className="toast" role="status"><Star size={17} /><span>{toast}</span><button className="icon-button" onClick={() => setToast('')} aria-label="Dismiss message"><X size={17} /></button></div>}
     {authOpen && <AuthDialog key={`auth:${accountKey}`} onClose={() => setAuthOpen(false)} onComplete={signedIn} />}
     {editor && <RatingDialog key={`${accountKey}:${editor.movieId}`} movie={editor} initial={ratings.get(editor.movieId) ?? 7} hasRating={ratings.has(editor.movieId)} user={user} onClose={() => setEditor(null)} onAuth={signIn} onSaved={saved} onAdd={() => addToList(editor)} />}

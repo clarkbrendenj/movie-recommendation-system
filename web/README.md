@@ -7,6 +7,9 @@ popularity. Movie and TV recommendation views keep the rankers separate.
 Dedicated movie and whole-series rating queues feed titles to rate, with
 skip-for-now and haven't-seen controls. Private watchlists save titles; Together
 lists combine confirmed friends' preferences without exposing their ratings.
+Navigation explicitly separates Movie recommendations, TV recommendations, and
+the two rating modes. Opening a list replaces the overview with a dedicated
+list view and a prominent Back control.
 
 The movie basis retains all 6,885 original feature rows. A documented exact-ID
 IMDb overlay excludes 67 known series/episodes from new movie discovery, leaving
@@ -47,6 +50,13 @@ schema migration permits the finer precision while preserving existing rows.
 An older 4.5-star rating still appears as 9.0/10. `GET /api/me` declares
 `ratingScale: 10`; rating writes must include that field to prevent old clients
 from silently submitting ratings on the previous scale.
+
+Rating queues use a large Save & Next arrow to the right of the poster/fader,
+including on phones. A confirmed save immediately advances and updates the
+account's local ratings; it does not wait for a second profile request. Upcoming
+titles prefetch while the current title remains editable. Failed saves retain
+the current title and score. Editing an existing rating uses the ordinary Save
+action rather than advancing the queue.
 
 TV ratings use that same adapter and storage format. FilmAffinity IDs are encoded
 in a separate numeric namespace, so movie and series ratings cannot collide.
@@ -91,6 +101,8 @@ node lib/media-catalog.test.mjs
 node lib/auth-crypto.test.mjs
 node lib/auth-migration.test.mjs
 node lib/collaboration-policy.test.mjs
+node lib/title-format.test.mjs
+node lib/title-details.test.mjs
 node scripts/app-smoke.mjs
 ```
 
@@ -153,14 +165,53 @@ The app cannot recommend movies outside its frozen training-candidate catalog.
 MovieLens and IMDb non-commercial dataset terms apply. FilmAffinity source
 provenance and uploader terms are recorded in the source audit; candidate units
 remain provisional beyond the confirmed exclusions. Dataset attribution is
-linked in the footer. Artwork is generated with CSS rather than copied posters.
+linked in the footer.
+
+## Display metadata and artwork
+
+`public/catalog/title-details.json` supplies display-only cast/director names
+from the existing exact-ID IMDb and FilmAffinity data. Years remain associated
+with those same source IDs. The alias-label cleanup matches both the known
+series ID and its original title, so genuine names containing `aka` are kept.
+Neither title formatting nor display enrichment changes model features, user
+ratings, recommendation weights, or the movie/series identity namespaces.
+
+TVmaze supplies verified TV artwork, ended years, and known premiered season
+counts. A match must have one exact normalized title and premiere year;
+ambiguous matches are omitted. Specials and unaired planned seasons do not
+inflate the count. A bounded cached export seeds popular titles, and the client
+can enrich other series through the public API. Only public title queries are
+sent, without app cookies, user identities, or ratings. Community scores are
+never included in the display overlay or shown beside the fader. TVmaze-derived
+data is attributed to [TVmaze](https://www.tvmaze.com/) under
+[CC BY-SA](https://creativecommons.org/licenses/by-sa/4.0/), with source links
+on title details. The JSON overlay is public and may be reused under the
+applicable source terms; its TVmaze-derived fields retain that license.
+
+Artwork falls back to the existing theater-style CSS cover when unavailable
+or when an image fails. Movie posters need a separate provider connection
+(for example, a free non-commercial TMDB API account); no paid service or key
+is enabled by this update. Cast, crew, and season details appear when known.
+
+To regenerate display data in the original project checkout with its existing
+Python environment and cached raw data:
+
+```powershell
+node scripts/build-title-cleanup.mjs
+node scripts/build-title-details.mjs --tvmaze-limit 100 --max-requests 200
+```
+
+The second command defaults to offline operation without those options. Its
+network request budget is explicit; it never trains or modifies either model.
 
 ## Hosting
 
-Sites provides the current outer access gate, D1 provisioning, migrations,
-source versions, and deployment. Afterglow accounts authorize app data. The Site
-remains owner-private; changing hosting never grants access to another account's
-ratings. Independent hosting is prepared separately below.
+The active independent app is hosted at
+https://afterglow.clarkbrendenj.workers.dev with Cloudflare Workers and D1.
+Afterglow accounts authorize app data; it has no outer ChatGPT sign-in gate.
+The older Sites deployment remains owner-private and separate. Changing hosting
+never grants access to another account's ratings. Independent hosting commands
+are documented below.
 No credentials belong in source, model assets, or hosting configuration.
 
 The app remains part of the parent project checkout. Sites publication keeps
