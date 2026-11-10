@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { createModel, recommend, browseMovies, isValidRating } from "./recommender.mjs";
+import { createModel, recommend, rankMovies, browseMovies, isValidRating } from "./recommender.mjs";
 
 function sparse(name, rows) {
   const indptr = [0];
@@ -30,9 +30,19 @@ function fixture() {
   ]);
 }
 
-test("ratings require finite half-star values between 0.5 and 5", () => {
-  for (const value of [.5, 1, 3.5, 5]) assert.equal(isValidRating(value), true);
-  for (const value of [0, 5.5, .75, NaN, Infinity, "5", null]) assert.equal(isValidRating(value), false);
+test("ratings accept model-scale twentieths corresponding to display tenths", () => {
+  for (const value of [.5, .55, .75, 1, 3.55, 3.8, 5]) assert.equal(isValidRating(value), true);
+  for (const value of [0, 5.5, .751, 3.555, NaN, Infinity, "5", null]) assert.equal(isValidRating(value), false);
+});
+
+test("full ranking preserves personal order for group utility aggregation", () => {
+  const model = fixture();
+  const ratings = [{ movieId: 1, rating: 4.05 }];
+  const full = rankMovies(model, ratings);
+  assert.deepEqual(full.movies.slice(0, 2), recommend(model, ratings, 2).movies);
+  assert.equal(full.movies.length, 3);
+  assert.equal(full.likes, 1);
+  assert.deepEqual(rankMovies(model, ratings, new Set([3])).movies.map(m => m.movieId), [3]);
 });
 
 test("cold start uses popularity, then IMDb adjustment, then movie ID", () => {

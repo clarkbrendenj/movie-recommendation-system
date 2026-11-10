@@ -3,10 +3,14 @@ import assert from "node:assert/strict";
 import { DISPLAY_RATING_SCALE, isValidDisplayRating, displayToModel, modelToDisplay } from "./rating-scale.mjs";
 import { createModel, recommend } from "./recommender.mjs";
 
-test("display ratings accept every integer from 1 to 10 and reject other values", () => {
+test("display ratings accept every tenth from 1 to 10 and reject finer precision", () => {
   assert.equal(DISPLAY_RATING_SCALE, 10);
-  for (let rating = 1; rating <= 10; rating++) assert.equal(isValidDisplayRating(rating), true);
-  for (const rating of [0, 11, -1, .5, 4.5, NaN, Infinity, -Infinity, "8", null, undefined, true]) {
+  for (let tenth = 10; tenth <= 100; tenth++) {
+    const rating = tenth / 10;
+    assert.equal(isValidDisplayRating(rating), true);
+    assert.equal(modelToDisplay(displayToModel(rating)), rating);
+  }
+  for (const rating of [0, 11, -1, .5, 4.51, 7.55, NaN, Infinity, -Infinity, "8", null, undefined, true]) {
     assert.equal(isValidDisplayRating(rating), false);
     assert.throws(() => displayToModel(rating), RangeError);
   }
@@ -26,7 +30,7 @@ test("all existing half-star ratings retain their meaning without migration", ()
     assert.equal(displayToModel(shown), stored);
   }
   assert.equal(modelToDisplay(4.5), 9);
-  for (const stored of [0, 5.5, 1.25, NaN, Infinity, "4.5", null]) {
+  for (const stored of [0, 5.5, 1.251, NaN, Infinity, "4.5", null]) {
     assert.throws(() => modelToDisplay(stored), RangeError);
   }
 });
@@ -47,4 +51,7 @@ test("7/10 stays below the model's like threshold and 8/10 becomes a like", () =
   assert.equal(liked.mode, "personalized");
   assert.ok(lower.movies.every((movie) => movie.movieId !== 1));
   assert.ok(liked.movies.every((movie) => movie.movieId !== 1));
+  const almost = recommend(model, [{ movieId: 1, rating: displayToModel(7.9) }]);
+  assert.equal(almost.likes, 0);
+  assert.equal(displayToModel(7.6), 3.8);
 });

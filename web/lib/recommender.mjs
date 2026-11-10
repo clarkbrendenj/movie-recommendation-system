@@ -15,7 +15,7 @@
 /** @param {number} value */
 export function isValidRating(value) {
   return typeof value === "number" && Number.isFinite(value)
-    && value >= 0.5 && value <= 5 && Number.isInteger(value * 2);
+    && value >= 0.5 && value <= 5 && Math.abs(value * 20 - Math.round(value * 20)) < 1e-8;
 }
 
 /** @param {ModelMetadata} metadata @param {SparseGroup[]} groups @returns {Model} */
@@ -121,9 +121,12 @@ function recommendationReason(movie, likedMovies, personalized) {
 /**
  * The original model uses ratings >=4 as likes. Lower ratings exclude a film
  * from future recommendations; they do not contribute a negative preference.
- * @param {Model} model @param {Rating[]} ratings @param {number} [limit]
+ * Full candidate ranking for shared-list aggregation.
+ * @param {Model} model @param {Rating[]} ratings
+ * @param {ReadonlySet<number>} [eligibleIds] Optional output-only candidate filter;
+ * profile features and unseen normalization retain the complete frozen catalog.
  */
-export function recommend(model, ratings, limit = 12) {
+export function rankMovies(model, ratings, eligibleIds) {
   const { metadata } = model;
   const { seen, likedRows } = userProfile(model, ratings);
   const personalized = likedRows.length > 0;
@@ -142,7 +145,8 @@ export function recommend(model, ratings, limit = 12) {
       scores[index] += metadata.weights.imdb * metadata.movies[index].imdbAdjustment;
     }
   }
-  const indices = metadata.movies.map((_, index) => index).filter((index) => !seen.has(index));
+  const indices = metadata.movies.map((_, index) => index).filter((index) => !seen.has(index)
+    && (!eligibleIds || eligibleIds.has(metadata.movies[index].movieId)));
   indices.sort((left, right) => {
     const a = metadata.movies[left];
     const b = metadata.movies[right];
@@ -153,7 +157,7 @@ export function recommend(model, ratings, limit = 12) {
   });
   const likedMovies = likedRows.map((index) => metadata.movies[index]);
   return {
-    movies: indices.slice(0, Math.max(0, Math.min(48, Math.trunc(limit)))).map((index) => ({
+    movies: indices.map((index) => ({
       ...metadata.movies[index],
       score: scores[index],
       reason: recommendationReason(metadata.movies[index], likedMovies, personalized),
@@ -164,17 +168,28 @@ export function recommend(model, ratings, limit = 12) {
   };
 }
 
+/** Return a bounded personal shelf, preserving the frozen model's ranking.
+ * @param {Model} model @param {Rating[]} ratings @param {number} [limit]
+ * @param {ReadonlySet<number>} [eligibleIds]
+ */
+export function recommend(model, ratings, limit = 12, eligibleIds) {
+  const result = rankMovies(model, ratings, eligibleIds);
+  return { ...result, movies: result.movies.slice(0, Math.max(0, Math.min(48, Math.trunc(limit)))) };
+}
+
 /** @param {string} value */
 function searchText(value) {
   return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-/** @param {ModelMetadata} metadata @param {{q?:string,genre?:string,page?:number,sort?:string,ids?:number[]}} options */
-export function browseMovies(metadata, options = {}) {
+/** @param {ModelMetadata} metadata @param {{q?:string,genre?:string,page?:number,sort?:string,ids?:number[]}} options
+ * @param {ReadonlySet<number>} [eligibleIds] */
+export function browseMovies(metadata, options = {}, eligibleIds) {
   const query = searchText(options.q || "").split(" ").filter(Boolean);
   const genre = options.genre || "";
   const ids = options.ids ? new Set(options.ids) : null;
   const movies = metadata.movies.filter((movie) => {
+    if (eligibleIds && !eligibleIds.has(movie.movieId)) return false;
     if (ids && !ids.has(movie.movieId)) return false;
     if (genre && !movie.genres.includes(genre)) return false;
     if (!query.length) return true;

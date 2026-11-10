@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Afterglow — your next great movie",
-  description: "Rate the films you know. Find the ones you'll love. Your own movie club, shaped by your taste.",
+  title: "Afterglow — your private picture house",
+  description: "Your private picture house. Rate movies and whole TV series, save watchlists, and discover a great watch together.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
