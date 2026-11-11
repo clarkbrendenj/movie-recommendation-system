@@ -60,6 +60,14 @@ through row refreshes and failed requests, and clear only after a successful
 save or correction. The full vertical-fader editor remains available on title
 selection and shares these pending scores.
 
+**My Ratings** and saved watchlist titles include Sort by and Order controls in
+both poster and compact views. They sort by your saved score, the first listed
+genre, Favorite status, or release year, in either direction. Unrated titles and
+missing genres/years remain last. Pending slider values and public/provider
+ratings never affect this ordering. Sort choices survive inline saves and view
+switches while the screen remains open. Saved Together titles use the same
+personal display controls; recommendation shelves retain their model ordering.
+
 Existing hearts become Favorites without a database migration; the stored API
 field remains `liked` for compatibility. A Favorite is a binary positive signal,
 including without a score, and is counted once if the rating is already high.

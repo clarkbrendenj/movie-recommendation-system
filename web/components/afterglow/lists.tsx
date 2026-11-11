@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, ArrowRight, Bookmark, Check, Copy, LoaderCircle, Plus, RefreshCw, Trash2, Users, X } from "lucide-react";
 import { api, EMPTY_FRIENDS, initials, mediaKind, message, titleOf, type Friend, type Friends, type MediaType, type Movie, type Recommendations, type SavedList, type Tab, type User } from "./types";
 import { AuthGate, Busy, Empty, ErrorNotice, Modal, MovieGrid } from "./ui";
 import { useCollectionView } from "./collection-view";
+import { useTitleActivity } from "./activity";
+import { SortControls, type SortField, type SortDirection } from "./collection-sort";
+import { sortCollection } from "../../lib/collection-sort.mjs";
 import "./list-view.css";
 
 type ScreenProps = { kind: "watchlist" | "together"; user: User | null; ratings: Map<number, number>; onAuth: () => void; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void; onToast: (text: string) => void; onNavigate: (tab: Tab) => void; revision: number };
@@ -56,6 +59,8 @@ export function ListsScreen(props: ScreenProps) {
 
 function ListsSession({ kind, user, ratings, onRate, onAdd, onToast, onNavigate, revision }: ScreenProps & { user: User }) {
   const { view } = useCollectionView();
+  const activity = useTitleActivity();
+  const [sortField, setSortField] = useState<SortField>('original'), [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [lists, setLists] = useState<SavedList[]>([]), [selected, setSelected] = useState<string | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [detail, setDetail] = useState<{ list: SavedList; items: Movie[] } | null>(null), [detailLoading, setDetailLoading] = useState(false), [detailError, setDetailError] = useState(""), [detailRevision, setDetailRevision] = useState(0);
   const [recommendations, setRecommendations] = useState<Recommendations | null>(null), [recLoading, setRecLoading] = useState(false), [recError, setRecError] = useState("");
@@ -115,6 +120,8 @@ function ListsSession({ kind, user, ratings, onRate, onAdd, onToast, onNavigate,
     catch (failure) { if (alive.current) onToast(message(failure)); } finally { if (alive.current) setMutating(false); }
   }
   const shown = detail?.list;
+  const sortedSavedItems = useMemo(() => sortCollection(detail?.items || [],
+    { field: sortField, direction: sortDirection, ratings, states: activity.states }), [detail?.items, sortField, sortDirection, ratings, activity.states]);
   const preview = lists.find(list => list.id === selected);
   return <>
     {selected ? <section className="list-focused-view list-detail" aria-labelledby="list-view-title" data-list-view="focused">
@@ -148,7 +155,8 @@ function ListsSession({ kind, user, ratings, onRate, onAdd, onToast, onNavigate,
         </>}
         <section className="list-saved-section" aria-label={kind === "together" ? "Saved for this group" : "Saved for later"}>
           <div className="list-toolbar"><h2>{kind === "together" ? "Saved for this group" : "Saved for later"}</h2><span>{detail.items.length} titles</span></div>
-          {detail.items.length ? <MovieGrid movies={detail.items} ratings={ratings} onRate={onRate} onAdd={onAdd} onRemove={movie => void removeItem(movie)} /> :
+          {detail.items.length > 0 && <SortControls field={sortField} direction={sortDirection} onChange={(field, direction) => { setSortField(field); setSortDirection(direction); }} label="Sort saved titles" />}
+          {detail.items.length ? <MovieGrid movies={sortedSavedItems} ratings={ratings} onRate={onRate} onAdd={onAdd} onRemove={movie => void removeItem(movie)} /> :
             <Empty title={kind === "together" ? "Make a plan from your shared picks." : "A good story deserves a spot."} action={kind === "watchlist" ? <button className="button outline-button secondary-button" onClick={() => onNavigate(shown.mediaType === "series" ? "series" : "movies")}>Find something to save <ArrowRight size={16} /></button> : undefined}>
               {kind === "together" ? "Save a recommendation above to keep it here for everyone. Refreshing your picks never removes saved titles." : "Choose Save on any movie or series to keep it here. A watchlist is a plan, not a rating."}
             </Empty>}
