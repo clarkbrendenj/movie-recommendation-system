@@ -1,11 +1,12 @@
 import { formatTitle } from './title-format.mjs';
+import { isCollectionWatched } from './collection-filter.mjs';
 
-/** @typedef {'original'|'rating'|'genre'|'favorite'|'year'} CollectionSortField */
+/** @typedef {'original'|'rating'|'genre'|'favorite'|'year'|'watched'} CollectionSortField */
 /** @typedef {'asc'|'desc'} CollectionSortDirection */
-/** @typedef {{field?:CollectionSortField,direction?:CollectionSortDirection,ratings?:ReadonlyMap<number,number>,states?:ReadonlyMap<number,{liked?:boolean}>}} CollectionSortOptions */
+/** @typedef {{field?:CollectionSortField,direction?:CollectionSortDirection,ratings?:ReadonlyMap<number,number>,states?:ReadonlyMap<number,{liked?:boolean,watched?:boolean}>}} CollectionSortOptions */
 
 /** @type {readonly CollectionSortField[]} */
-export const COLLECTION_SORT_FIELDS = Object.freeze(['original', 'rating', 'genre', 'favorite', 'year']);
+export const COLLECTION_SORT_FIELDS = Object.freeze(['original', 'rating', 'genre', 'favorite', 'year', 'watched']);
 const titleOrder = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
 
 function meaningfulGenres(item) {
@@ -44,6 +45,8 @@ export function sortCollection(items, { field = 'original', direction = 'desc', 
       if (typeof item.year === 'number' && Number.isSafeInteger(item.year) && item.year > 0) key = item.year;
     } else if (field === 'favorite') {
       key = states.get(item.movieId)?.liked === true ? 1 : 0;
+    } else if (field === 'watched') {
+      key = isCollectionWatched(item.movieId, ratings, states) ? 1 : 0;
     } else {
       const genres = meaningfulGenres(item);
       if (genres.length) key = genres;

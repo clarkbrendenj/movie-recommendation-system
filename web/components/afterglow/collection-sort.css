@@ -61,8 +61,19 @@
   font-size:10px;
   line-height:1.6;
 }
+.collection-query-toolbar .collection-sort {
+  flex:1 1 350px;
+  gap:12px;
+  min-width:0;
+  margin:0;
+  padding:0;
+  border:0;
+  background:transparent;
+}
+.collection-query-toolbar .collection-sort-field { flex:1 1 160px; }
 @media(max-width:560px) {
   .collection-sort { gap:12px; padding:13px; }
   .collection-sort-field { flex:1 1 170px; }
   .collection-sort-select { font-size:12px; }
+  .collection-query-toolbar .collection-sort { flex-basis:100%; }
 }

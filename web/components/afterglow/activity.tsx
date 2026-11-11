@@ -92,7 +92,7 @@ export function useTitleActivity() {
   return activity;
 }
 
-export function TitleActions({ movie, onAdd, disabled = false, compact = false }: { movie: Movie; onAdd: () => void; disabled?: boolean; compact?: boolean }) {
+export function TitleActions({ movie, onAdd, disabled = false, compact = false, actions = ['watched', 'favorite', 'list'] }: { movie: Movie; onAdd: () => void; disabled?: boolean; compact?: boolean; actions?: readonly ('watched' | 'favorite' | 'list')[] }) {
   const activity = useTitleActivity();
   const [error, setError] = useState(""), [confirm, setConfirm] = useState(false);
   const alive = useRef(true);
@@ -111,9 +111,9 @@ export function TitleActions({ movie, onAdd, disabled = false, compact = false }
   }
   return <div className={`title-activity ${compact ? "title-activity-compact" : ""}`}>
     <div className={`title-actions ${compact ? "title-actions-compact" : ""}`} role="group" aria-label={`Your activity for ${titleOf(movie)}`}>
-      <button type="button" className={`title-action ${watched ? "is-watched is-active" : ""}`} aria-pressed={watched} aria-label={`${watched ? "Mark unwatched" : "Mark watched"}: ${titleOf(movie)}`} onClick={watch} disabled={busy} title={watched ? "Mark unwatched" : "Mark watched without giving a score"}><Eye size={compact ? 16 : 21} /><span>{watched ? "Watched" : "Mark watched"}</span></button>
-      <button type="button" className={`title-action ${favorite ? "is-favorite is-active" : ""}`} aria-pressed={favorite} aria-label={`${favorite ? "Remove favorite" : "Favorite"}: ${titleOf(movie)}`} onClick={() => void update({ liked: !favorite })} disabled={busy} title="Favorites count as positive preferences, even with a low rating"><Heart size={compact ? 16 : 21} fill={favorite ? "currentColor" : "none"} /><span>{favorite ? "Favorited" : "Favorite"}</span></button>
-      {movie.mediaType !== "other" && <button type="button" className="title-action" onClick={onAdd} disabled={busy}><BookmarkPlus size={compact ? 16 : 21} /><span>Add to list</span></button>}
+      {actions.includes('watched') && <button type="button" className={`title-action ${watched ? "is-watched is-active" : ""}`} aria-pressed={watched} aria-label={`${watched ? "Mark unwatched" : "Mark watched"}: ${titleOf(movie)}`} onClick={watch} disabled={busy} title={watched ? "Mark unwatched" : "Mark watched without giving a score"}><Eye size={compact ? 16 : 21} /><span>{watched ? "Watched" : "Mark watched"}</span></button>}
+      {actions.includes('favorite') && <button type="button" className={`title-action ${favorite ? "is-favorite is-active" : ""}`} aria-pressed={favorite} aria-label={`${favorite ? "Remove favorite" : "Favorite"}: ${titleOf(movie)}`} onClick={() => void update({ liked: !favorite })} disabled={busy} title="Favorites count as positive preferences, even with a low rating"><Heart size={compact ? 16 : 21} fill={favorite ? "currentColor" : "none"} /><span>{favorite ? "Favorited" : "Favorite"}</span></button>}
+      {actions.includes('list') && movie.mediaType !== "other" && <button type="button" className="title-action" onClick={onAdd} disabled={busy}><BookmarkPlus size={compact ? 16 : 21} /><span>Add to list</span></button>}
     </div>
     {!compact && <p className="title-action-note">Favorites count as positive preferences, even with a low rating. Your score stays unchanged.</p>}
     {confirm && <div className="title-action-confirm" role="group" aria-label="Confirm marking this title unwatched"><p>Marking this title unwatched also removes your saved rating. Your favorite stays as it is.</p><button type="button" className="title-action-remove" onClick={() => void update({ watched: false })} disabled={busy}>{pending ? <LoaderCircle size={15} className="spinning" /> : <Trash2 size={15} />}Remove rating &amp; mark unwatched</button><button type="button" className="text-button" onClick={() => setConfirm(false)} disabled={busy}>Cancel</button></div>}

@@ -11,7 +11,7 @@ test('original order is a fresh array retaining every item and source identity',
   assert.deepEqual(ids(sorted), [1000000001, 2, 1]);
   assert.notEqual(sorted, rows);
   assert.equal(sorted[0], rows[0]);
-  assert.deepEqual(COLLECTION_SORT_FIELDS, ['original', 'rating', 'genre', 'favorite', 'year']);
+  assert.deepEqual(COLLECTION_SORT_FIELDS, ['original', 'rating', 'genre', 'favorite', 'year', 'watched']);
 });
 
 test('rating sort uses confirmed personal scores, keeping unrated and invalid values last in either direction', () => {
@@ -45,6 +45,15 @@ test('Favorite sorting uses the explicit flag independently of rating and watche
     [1000000003, { liked: true, watched: false }]]);
   assert.deepEqual(ids(sortCollection(rows, { field: 'favorite', direction: 'desc', ratings, states })), [2, 1000000003, 4, 1]);
   assert.deepEqual(ids(sortCollection(rows, { field: 'favorite', direction: 'asc', ratings, states })), [4, 1, 2, 1000000003]);
+});
+
+test('Watched sorting honors explicit state, then uses valid saved scores as a legacy fallback', () => {
+  const rows = [movie(1, 'A rated'), movie(2, 'B explicit watched'), movie(3, 'C explicit unwatched'),
+    movie(1000000004, 'D unseen series'), movie(5, 'E invalid score')];
+  const ratings = new Map([[1, 5], [3, 8], [5, NaN]]);
+  const states = new Map([[2, { watched: true }], [3, { watched: false }]]);
+  assert.deepEqual(ids(sortCollection(rows, { field: 'watched', direction: 'desc', ratings, states })), [1, 2, 3, 1000000004, 5]);
+  assert.deepEqual(ids(sortCollection(rows, { field: 'watched', direction: 'asc', ratings, states })), [3, 1000000004, 5, 1, 2]);
 });
 
 test('ties use the displayed cleaned title and numeric identity for deterministic mixed catalogs', () => {
