@@ -1,4 +1,4 @@
-import { isValidImdbId, isValidTmdbId, matchesTmdbMovie, selectTmdbMovieMatch, selectTmdbTvMatch, tmdbDisplayDetails } from './tmdb-details.mjs';
+import { isValidImdbId, isValidTmdbId, matchesTmdbMovie, selectTmdbMovieMatch, selectTmdbTvMatch, tmdbDisplayDetails, selectTmdbPoster, tmdbPosterUrl } from './tmdb-details.mjs';
 
 /** @param {string|null} raw */
 export function parseArtworkIds(raw) {
@@ -33,6 +33,15 @@ export async function getTmdbTitleDetails(ids, options) {
     } catch { unavailable = true; return null; }
     finally { clearTimeout(timer); }
   }
+  async function display(details, mediaType) {
+    const result = tmdbDisplayDetails(details, { mediaType });
+    if (!result.posterUrl) {
+      const images = await request(`/${mediaType === 'movie' ? 'movie' : 'tv'}/${details.id}/images`);
+      const poster = selectTmdbPoster(images, details.id);
+      if (poster) result.posterUrl = tmdbPosterUrl(poster);
+    }
+    return result;
+  }
   const entries = await Promise.all(ids.map(async id => {
     let cached;
     try { cached = await options.cache?.get(id); } catch { /* The public cache is optional. */ }
@@ -49,7 +58,7 @@ export async function getTmdbTitleDetails(ids, options) {
       }
       if (isValidTmdbId(tmdbId)) {
         const movie = await request(`/movie/${tmdbId}`, { append_to_response: 'credits', language: 'en-US' });
-        if (matchesTmdbMovie(movie, identity)) details = tmdbDisplayDetails(movie, { mediaType: 'movie' });
+        if (matchesTmdbMovie(movie, identity)) details = await display(movie, 'movie');
       }
     } else if (identity.mediaType === 'series') {
       const search = async query => selectTmdbTvMatch(await request('/search/tv', { query, first_air_date_year: String(identity.year), include_adult: 'false', language: 'en-US' }), identity);
@@ -57,7 +66,7 @@ export async function getTmdbTitleDetails(ids, options) {
       if (!match && identity.alternateTitle && identity.alternateTitle !== identity.title) match = await search(identity.alternateTitle);
       if (match) {
         const show = await request(`/tv/${match.id}`, { append_to_response: 'aggregate_credits', language: 'en-US' });
-        if (show?.id === match.id && selectTmdbTvMatch([show], identity)) details = tmdbDisplayDetails(show, { mediaType: 'series' });
+        if (show?.id === match.id && selectTmdbTvMatch([show], identity)) details = await display(show, 'series');
       }
     }
     const result = details || {};

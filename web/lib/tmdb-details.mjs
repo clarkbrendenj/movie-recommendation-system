@@ -75,6 +75,17 @@ export function tmdbPosterUrl(posterPath, options = {}) {
   } catch { return undefined; }
 }
 
+/** Select artwork only from the already-verified title's images response.
+ * @param {any} response @param {number} expectedId @returns {string|undefined}
+ */
+export function selectTmdbPoster(response, expectedId) {
+  if (!isValidTmdbId(expectedId) || response?.id !== expectedId || !Array.isArray(response.posters)) return undefined;
+  const priority = item => item.iso_639_1 === 'en' ? 0 : item.iso_639_1 == null ? 1 : 2;
+  const valid = response.posters.filter(item => tmdbPosterUrl(item?.file_path));
+  valid.sort((a, b) => priority(a) - priority(b) || (Number(b.width) || 0) - (Number(a.width) || 0));
+  return valid[0]?.file_path;
+}
+
 /** @param {any} entries */
 function names(entries) {
   if (!Array.isArray(entries)) return [];

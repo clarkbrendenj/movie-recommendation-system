@@ -189,7 +189,20 @@ on title details. The JSON overlay is public and may be reused under the
 applicable source terms; its TVmaze-derived fields retain that license.
 
 Artwork falls back to the existing theater-style CSS cover when unavailable
-or when an image fails. Cast, crew, and season details appear when known.
+or when no verified cover can load. A known TVmaze cover remains an alternate
+when a preferred TMDB image fails. Covers appear in recommendation cards,
+watchlists, Together lists, rating history, rating search, and rating mode.
+The next three rating-queue titles preload their public metadata and cover
+images. Cast, crew, and season details appear when known.
+
+The browser also consumes the optional `public/catalog/title-details-tmdb.json`
+overlay produced by the bounded exporter. Verified precomputed covers render
+without a new provider lookup; remaining titles use at most two concurrent
+six-ID batches. Transient failures receive one bounded retry, and an absent
+connection is rechecked after a shared cooldown. Both same-origin metadata
+requests carry the Cloudflare Access session; cookies and account data are
+never forwarded to external metadata services. Posters can be missing at a
+provider, so a lookup attempt is not reported as a verified cover.
 
 ### Optional TMDB connection
 
@@ -226,6 +239,10 @@ The visible Credits section uses TMDB's approved logo and attribution notice
 when the connection is configured. Movie and series model assets and ranking
 weights remain unchanged.
 
+If a matched title has no primary poster, the provider checks that same
+verified movie or series' image collection. It cannot use images belonging to
+a different title. English artwork is preferred when available.
+
 To regenerate display data in the original project checkout with its existing
 Python environment and cached raw data:
 
@@ -236,6 +253,23 @@ node scripts/build-title-details.mjs --tvmaze-limit 100 --max-requests 200
 
 The second command defaults to offline operation without those options. Its
 network request budget is explicit; it never trains or modifies either model.
+
+From the project root, the offline coverage audit reports stored poster
+references separately from unseeded titles and live runtime caches:
+
+```powershell
+node scripts/audit-poster-coverage.mjs
+```
+
+The optional TMDB exporter makes bounded progress through the full catalog.
+Repeated runs skip recent completed outcomes, retry temporary failures, and
+save atomic checkpoints every ten checked titles. `--offset` selects a starting
+catalog position and `--refresh` rechecks completed titles. Its output records
+verified covers, matched titles without provider artwork, unmatched/ambiguous
+titles, and temporary failures separately. Credentials are accepted only from
+the process environment; never paste a token into a command or commit it.
+The owner must first obtain TMDB API access; no movie cover coverage is claimed
+merely because the integration or import script is installed.
 
 ## Hosting
 

@@ -56,3 +56,15 @@ test('public cache hits avoid both identity loading and external API requests', 
   const result = await getTmdbTitleDetails([1], { token: 'test-only-token', getIdentity: async () => { throw Error('should use cache'); }, fetch: async () => { throw Error('should use cache'); }, cache: { get: async () => cached, set: async () => {} } });
   assert.deepEqual(result.items[1], cached);
 });
+test('a verified movie without a primary poster uses its own image collection', async () => {
+  const result = await getTmdbTitleDetails([1], { token: 'test-only-token', getIdentity: async () => movieIdentity, fetch: async url => {
+    if (url.pathname === '/3/movie/862') return json({ ...film, poster_path: null });
+    assert.equal(url.pathname, '/3/movie/862/images');
+    return json({ id: 862, posters: [{ file_path: '/foreign123.jpg', iso_639_1: 'fr', width: 1000 }, { file_path: '/english123.jpg', iso_639_1: 'en', width: 500 }] });
+  } });
+  assert.equal(result.items[1].posterUrl, 'https://image.tmdb.org/t/p/w342/english123.jpg');
+});
+test('artwork from a different provider title never fills a missing poster', async () => {
+  const result = await getTmdbTitleDetails([1], { token: 'test-only-token', getIdentity: async () => movieIdentity, fetch: async url => url.pathname.endsWith('/images') ? json({ id: 863, posters: [{ file_path: '/wrong123.jpg' }] }) : json({ ...film, poster_path: null }) });
+  assert.equal(result.items[1].posterUrl, undefined);
+});

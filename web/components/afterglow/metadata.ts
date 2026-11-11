@@ -1,149 +1,188 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { titleOf, type Movie, type TitleDetails } from './types';
 import { selectTvmazeMatch, tvmazeDisplayDetails } from '../../lib/title-details.mjs';
 
 type Catalog = { version: number; items: Record<string, TitleDetails> };
-let catalog: Catalog | undefined;
-let pending: Promise<Catalog> | undefined;
-let tmdbConfigured: boolean | null = null, tmdbFlush: ReturnType<typeof setTimeout> | undefined, tmdbLoading = false;
-const tmdbListeners = new Set<() => void>();
-const tmdbResults = new Map<number, TitleDetails | null>();
-const tmdbPending = new Map<number, Promise<TitleDetails | null>>();
-const tmdbQueue = new Map<number, (details: TitleDetails | null) => void>();
+type Cached = { details: TitleDetails | null; expires: number };
+export type ResolvedMovie = Movie & { posterFallbackUrls?: string[] };
+let catalog: Catalog | undefined, staticTmdb: Catalog | undefined;
+let catalogTask: Promise<unknown> | undefined, overlayTask: Promise<unknown> | undefined, overlayLoaded = false;
+let version = 0, tmdbConfigured: boolean | null = null, configurationExpires = 0, staticTmdbUsed = false;
+let configurationTimer: ReturnType<typeof setTimeout> | undefined, flushTimer: ReturnType<typeof setTimeout> | undefined, activeBatches = 0;
+const listeners = new Set<() => void>();
+const results = new Map<number, Cached>(), pending = new Map<number, Promise<TitleDetails | null>>();
+const queue = new Map<number, (details: TitleDetails | null) => void>();
+const seriesDetails = new Map<number, TitleDetails | null>(), seriesPending = new Map<number, Promise<TitleDetails | null>>();
+const warmedImages = new Set<string>();
+const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
+function publish() { version++; for (const listener of listeners) listener(); }
+function record(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+function safeUrl(value: unknown, host: string) { try { const url = new URL(String(value)); return url.protocol === 'https:' && url.host === host && !url.username && !url.password && !url.search && !url.hash ? url.href : undefined; } catch { return undefined; } }
 
-function setTmdbConfigured(value: boolean) {
-  if (value === tmdbConfigured) return;
-  tmdbConfigured = value;
-  for (const listener of tmdbListeners) listener();
+/** The overlay and API may carry only public display fields, never raw scores. */
+function tmdbDisplayOnly(value: unknown): TitleDetails | null {
+  if (!record(value)) return null;
+  const out: TitleDetails = {};
+  for (const key of ['displayTitle', 'alternateTitle'] as const) if (typeof value[key] === 'string' && value[key].trim()) out[key] = value[key].trim().slice(0, 400);
+  const poster = safeUrl(value.posterUrl, 'image.tmdb.org');
+  if (poster && /^\/t\/p\/(?:w342|w500)\/[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)$/i.test(new URL(poster).pathname)) out.posterUrl = poster;
+  for (const key of ['cast', 'directors', 'creators'] as const) if (Array.isArray(value[key])) {
+    const names = [...new Set(value[key].filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map(item => item.trim().slice(0, 150)))].slice(0, 16);
+    if (names.length) out[key] = names;
+  }
+  if (Number.isInteger(value.seasonCount) && Number(value.seasonCount) > 0 && Number(value.seasonCount) <= 1000) out.seasonCount = Number(value.seasonCount);
+  if (typeof value.seasonCountAsOf === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.seasonCountAsOf)) out.seasonCountAsOf = value.seasonCountAsOf;
+  if (Number.isInteger(value.endYear) && Number(value.endYear) >= 1800 && Number(value.endYear) <= new Date().getFullYear() + 1) out.endYear = Number(value.endYear);
+  for (const key of ['metadataSource', 'creditsSource'] as const) if (record(value[key])) {
+    const url = safeUrl(value[key].url, 'www.themoviedb.org');
+    if (value[key].name === 'TMDB' && url && /^\/(?:movie|tv)\/[1-9]\d*\/?$/.test(new URL(url).pathname)) out[key] = { name: 'TMDB', url };
+  }
+  return Object.keys(out).length ? out : null;
 }
-const subscribeTmdb = (listener: () => void) => { tmdbListeners.add(listener); return () => { tmdbListeners.delete(listener); }; };
-export function useTmdbEnabled() { return useSyncExternalStore(subscribeTmdb, () => tmdbConfigured === true, () => false); }
 
-async function flushTmdb() {
-  tmdbFlush = undefined;
-  if (tmdbLoading || !tmdbQueue.size) return;
-  tmdbLoading = true;
-  const group = [...tmdbQueue.entries()].slice(0, 6);
-  for (const [id] of group) tmdbQueue.delete(id);
-  try {
-    const response = await fetch(`/api/title-details?ids=${group.map(([id]) => id).join(',')}`, { credentials: 'same-origin', signal: AbortSignal.timeout(16000) });
-    if (!response.ok) throw new Error('Artwork is unavailable.');
-    const value = await response.json() as { configured: boolean; unavailable?: boolean; items: Record<string, TitleDetails> };
-    if (typeof value.configured !== 'boolean' || !value.items) throw new Error('Invalid artwork response.');
-    if (value.configured || !value.unavailable) setTmdbConfigured(value.configured);
-    for (const [id, resolve] of group) { const item = value.items[String(id)] || null; if (item || !value.unavailable) tmdbResults.set(id, item); resolve(item); }
-    if (!value.configured && !value.unavailable) {
-      for (const [id, resolve] of tmdbQueue) { tmdbResults.set(id, null); resolve(null); }
-      tmdbQueue.clear();
-    }
-  } catch {
-    for (const [, resolve] of group) resolve(null);
-  } finally {
-    tmdbLoading = false;
-    if (tmdbQueue.size) tmdbFlush = setTimeout(() => void flushTmdb(), 35);
+function configured(value: boolean) {
+  const changed = tmdbConfigured !== value;
+  tmdbConfigured = value;
+  configurationExpires = value ? Infinity : Date.now() + 45000;
+  if (configurationTimer) clearTimeout(configurationTimer);
+  if (!value && typeof window !== 'undefined') configurationTimer = setTimeout(() => { tmdbConfigured = null; publish(); }, 45050);
+  if (changed) publish();
+}
+export function useTmdbEnabled() { return useSyncExternalStore(subscribe, () => staticTmdbUsed || tmdbConfigured === true, () => false); }
+
+function loadCatalogs() {
+  if (!catalog && !catalogTask) catalogTask = fetch('/catalog/title-details.json', { credentials: 'same-origin' }).then(async response => {
+    if (!response.ok) throw new Error('Title details are unavailable.');
+    const value = await response.json() as Catalog;
+    if (value.version !== 1 || !record(value.items)) throw new Error('Invalid title details.');
+    catalog = value; publish();
+  }).catch(error => { catalogTask = undefined; throw error; });
+  if (!overlayLoaded && !overlayTask) overlayTask = fetch('/catalog/title-details-tmdb.json', { credentials: 'same-origin' }).then(async response => {
+    if (response.status === 404) { overlayLoaded = true; return; }
+    if (!response.ok) throw new Error('Additional artwork is unavailable.');
+    const value: unknown = await response.json();
+    if (!record(value) || value.version !== 1 || value.provider !== 'TMDB' || !record(value.items)) throw new Error('Invalid artwork catalog.');
+    const items: Record<string, TitleDetails> = {};
+    for (const [id, candidate] of Object.entries(value.items)) if (/^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id))) { const details = tmdbDisplayOnly(candidate); if (details) items[id] = details; }
+    staticTmdb = { version: 1, items }; overlayLoaded = true; publish();
+  }).catch(error => { overlayTask = undefined; throw error; });
+  return Promise.allSettled([catalogTask, overlayTask]);
+}
+
+function scheduleFlush() { if (!flushTimer && activeBatches < 2 && queue.size) flushTimer = setTimeout(flush, 35); }
+function flush() {
+  flushTimer = undefined;
+  while (queue.size && activeBatches < 2) {
+    const group = [...queue.entries()].slice(0, 6); for (const [id] of group) queue.delete(id);
+    activeBatches++;
+    void fetchBatch(group).finally(() => { activeBatches--; scheduleFlush(); });
   }
 }
-
-function tmdbDetails(id: number): Promise<TitleDetails | null> {
-  if (tmdbResults.has(id)) return Promise.resolve(tmdbResults.get(id) || null);
-  if (tmdbConfigured === false) return Promise.resolve(null);
-  const existing = tmdbPending.get(id);
-  if (existing) return existing;
-  const task = new Promise<TitleDetails | null>(resolve => { tmdbQueue.set(id, resolve); }).finally(() => { tmdbPending.delete(id); });
-  tmdbPending.set(id, task);
-  if (!tmdbFlush && !tmdbLoading) tmdbFlush = setTimeout(() => void flushTmdb(), 35);
-  return task;
+async function fetchBatch(group: [number, (details: TitleDetails | null) => void][]) {
+  const received = new Map<number, TitleDetails | null>();
+  const partialArtwork = new Set<number>();
+  let unresolved = group.map(([id]) => id), temporary = false;
+  for (let attempt = 0; attempt < 2 && unresolved.length; attempt++) {
+    if (attempt) await pause(650);
+    try {
+      const response = await fetch(`/api/title-details?ids=${unresolved.join(',')}`, { credentials: 'same-origin', signal: AbortSignal.timeout(16000) });
+      if (!response.ok) throw new Error('Artwork is unavailable.');
+      const value: unknown = await response.json();
+      if (!record(value) || typeof value.configured !== 'boolean' || !record(value.items)) throw new Error('Invalid artwork response.');
+      temporary = value.unavailable === true;
+      if (value.configured || !temporary) configured(value.configured);
+      const retry: number[] = [];
+      for (const id of unresolved) {
+        const incoming = tmdbDisplayOnly(value.items[String(id)]);
+        const previous = received.get(id);
+        const details = incoming ? { ...previous, ...incoming } : previous || null;
+        const retryPoster = temporary && !details?.posterUrl;
+        if (retryPoster) partialArtwork.add(id);
+        else if (details?.posterUrl) partialArtwork.delete(id);
+        if (details || !temporary) { received.set(id, details); results.set(id, { details, expires: partialArtwork.has(id) ? Date.now() + 30000 : value.configured ? Date.now() + (details ? 3600000 : 900000) : configurationExpires }); }
+        if (retryPoster) retry.push(id);
+      }
+      unresolved = retry;
+      if (!value.configured && !temporary) {
+        for (const [id, resolve] of queue) { results.set(id, { details: null, expires: configurationExpires }); resolve(null); } queue.clear();
+      }
+    } catch { temporary = true; }
+  }
+  for (const [id, resolve] of group) { const details = received.get(id) || null; if (!received.has(id) || partialArtwork.has(id)) results.set(id, { details, expires: Date.now() + 30000 }); resolve(details); }
+  publish();
 }
-const seriesDetails = new Map<number, TitleDetails | null>();
-const seriesPending = new Map<number, Promise<TitleDetails | null>>();
-// One bounded public request at a time, shared by the grid and rating editor.
-// Only title names/years go to TVmaze; account data and scores stay in Afterglow.
+function tmdbDetails(id: number): Promise<TitleDetails | null> {
+  const saved = results.get(id); if (saved && saved.expires > Date.now()) return Promise.resolve(saved.details);
+  if (tmdbConfigured === false && configurationExpires > Date.now()) return Promise.resolve(null);
+  const existing = pending.get(id); if (existing) return existing;
+  const task = new Promise<TitleDetails | null>(resolve => { queue.set(id, resolve); }).finally(() => { pending.delete(id); });
+  pending.set(id, task); scheduleFlush(); return task;
+}
+
 let requestTail: Promise<unknown> = Promise.resolve(), lastRequest = 0;
 const pause = (milliseconds: number) => new Promise(resolve => setTimeout(resolve, milliseconds));
-
 function publicTvmaze(path: string): Promise<unknown> {
   const task = requestTail.catch(() => {}).then(async () => {
     for (let attempt = 0; attempt < 3; attempt++) {
-      await pause(Math.max(0, 700 - (Date.now() - lastRequest)));
-      lastRequest = Date.now();
+      await pause(Math.max(0, 700 - (Date.now() - lastRequest))); lastRequest = Date.now();
       const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 8000);
       try {
         const response = await fetch(`https://api.tvmaze.com${path}`, { credentials: 'omit', referrerPolicy: 'no-referrer', signal: controller.signal });
         if (response.status === 429) { await response.body?.cancel(); await pause((attempt + 1) * 2000); continue; }
-        if (!response.ok) { await response.body?.cancel(); return null; }
+        if (response.status === 404) { await response.body?.cancel(); return null; }
+        if (!response.ok) { await response.body?.cancel(); throw new Error('Series details are temporarily unavailable.'); }
         return await response.json() as unknown;
       } finally { clearTimeout(timer); }
     }
-    return null;
-  });
-  requestTail = task;
-  return task;
+    throw new Error('Series details are temporarily unavailable.');
+  }); requestTail = task; return task;
 }
-
 function enrichSeries(movie: Movie): Promise<TitleDetails | null> {
   if (seriesDetails.has(movie.movieId)) return Promise.resolve(seriesDetails.get(movie.movieId) || null);
-  const current = seriesPending.get(movie.movieId);
-  if (current) return current;
+  const existing = seriesPending.get(movie.movieId); if (existing) return existing;
   const task = (async () => {
     const target = { title: titleOf(movie), alternateTitle: movie.alternateTitle, year: movie.year };
-    let candidates = await publicTvmaze(`/search/shows?q=${encodeURIComponent(target.title)}`);
-    let match = selectTvmazeMatch(candidates, target);
-    if (!match && target.alternateTitle && target.alternateTitle !== target.title) {
-      candidates = await publicTvmaze(`/search/shows?q=${encodeURIComponent(target.alternateTitle)}`);
-      match = selectTvmazeMatch(candidates, target);
-    }
+    let candidates = await publicTvmaze(`/search/shows?q=${encodeURIComponent(target.title)}`), match = selectTvmazeMatch(candidates, target);
+    if (!match && target.alternateTitle && target.alternateTitle !== target.title) { candidates = await publicTvmaze(`/search/shows?q=${encodeURIComponent(target.alternateTitle)}`); match = selectTvmazeMatch(candidates, target); }
     if (!match) { seriesDetails.set(movie.movieId, null); return null; }
-    // Retain verified artwork even when season information is unavailable.
-    let seasons: unknown = null;
-    try { seasons = await publicTvmaze(`/shows/${match.id}/seasons`); } catch { /* Preserve the verified artwork even if this optional lookup fails. */ }
-    const details = tvmazeDisplayDetails(match, seasons);
-    seriesDetails.set(movie.movieId, details);
-    return details;
-  })().finally(() => { seriesPending.delete(movie.movieId); });
-  seriesPending.set(movie.movieId, task);
-  return task;
+    let seasons: unknown = null; try { seasons = await publicTvmaze(`/shows/${match.id}/seasons`); } catch { /* Verified artwork is still useful. */ }
+    const details = tvmazeDisplayDetails(match, seasons); seriesDetails.set(movie.movieId, details); publish(); return details;
+  })().finally(() => { seriesPending.delete(movie.movieId); }); seriesPending.set(movie.movieId, task); return task;
 }
 
-function loadCatalog() {
-  if (!pending) pending = fetch('/catalog/title-details.json', { credentials: 'same-origin' })
-    .then(async response => {
-      if (!response.ok) throw new Error('Title details are unavailable.');
-      const value = await response.json() as Catalog;
-      if (value.version !== 1 || !value.items || typeof value.items !== 'object') throw new Error('Invalid title details.');
-      catalog = value;
-      return value;
-    }).catch(error => { pending = undefined; throw error; });
-  return pending;
+function resolved(movie: Movie): ResolvedMovie {
+  const base = catalog?.items[String(movie.movieId)], offline = staticTmdb?.items[String(movie.movieId)];
+  const online = results.get(movie.movieId)?.details, tvmaze = seriesDetails.get(movie.movieId);
+  const merged = { ...movie, ...base, ...tvmaze, ...online, ...offline, movieId: movie.movieId, mediaType: movie.mediaType };
+  const primary = merged.posterUrl;
+  const alternatives = [tvmaze?.posterUrl, base?.posterUrl, movie.posterUrl].filter((url): url is string => Boolean(url && url !== primary && safeUrl(url, 'static.tvmaze.com')));
+  return { ...merged, ...(alternatives.length ? { posterFallbackUrls: [...new Set(alternatives)] } : {}) };
 }
+async function ensureDetails(movie: Movie, onDetails?: () => void) {
+  await loadCatalogs();
+  onDetails?.();
+  if (movie.mediaType === 'other') return;
+  const offline = staticTmdb?.items[String(movie.movieId)];
+  if (offline && !staticTmdbUsed) { staticTmdbUsed = true; publish(); }
+  const current = resolved(movie);
+  const complete = current.posterUrl && (current.cast?.length || current.directors?.length || current.creators?.length) && (movie.mediaType !== 'series' || current.seasonCount);
+  if (!offline?.posterUrl && !complete) await tmdbDetails(movie.movieId);
+  onDetails?.();
+  const preferred = resolved(movie);
+  if (preferred.mediaType === 'series' && preferred.year && (!preferred.posterUrl || !preferred.seasonCount)) await enrichSeries(preferred).catch(() => {});
+}
+function warmPoster(movie: Movie) {
+  const url = resolved(movie).posterUrl; if (!url || typeof Image === 'undefined' || warmedImages.has(url)) return;
+  warmedImages.add(url); const image = new Image(); image.decoding = 'async'; image.referrerPolicy = 'no-referrer'; image.src = url;
+}
+/** Prefetch public details and image bytes only; user scores never enter this path. */
+export function prefetchTitleDetails(movies: Movie[]) { for (const movie of movies.slice(0, 3)) void ensureDetails(movie, () => warmPoster(movie)).then(() => warmPoster(movie)).catch(() => {}); }
 
-/** Shared public metadata only. Missing artwork or enrichment never blocks a rating. */
-export function useTitleDetails(movie: Movie): Movie {
-  const [details, setDetails] = useState(catalog);
-  const [online, setOnline] = useState<{ movieId: number; details: TitleDetails } | null>(null);
-  const [tmdb, setTmdb] = useState<{ movieId: number; details: TitleDetails | null } | null>(null);
-  useEffect(() => {
-    if (movie.mediaType === 'other') return;
-    let alive = true;
-    void tmdbDetails(movie.movieId).then(value => { if (alive) setTmdb({ movieId: movie.movieId, details: value }); });
-    return () => { alive = false; };
-  }, [movie.movieId, movie.mediaType]);
-  useEffect(() => {
-    if (catalog) { setDetails(catalog); return; }
-    let alive = true;
-    void loadCatalog().then(value => { if (alive) setDetails(value); }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
-  const overlay = details?.items[String(movie.movieId)];
-  const enriched = overlay ? { ...movie, ...overlay, movieId: movie.movieId, mediaType: movie.mediaType } : movie;
-  const preferred = tmdb?.movieId === movie.movieId && tmdb.details ? { ...enriched, ...tmdb.details } : enriched;
-  useEffect(() => {
-    if (!details || tmdb?.movieId !== movie.movieId || preferred.mediaType !== 'series' || !preferred.year || (preferred.posterUrl && preferred.seasonCount)) return;
-    let alive = true;
-    void enrichSeries(preferred).then(value => { if (alive && value) setOnline({ movieId: movie.movieId, details: value }); }).catch(() => {});
-    return () => { alive = false; };
-  }, [details, tmdb, movie.movieId, preferred.mediaType, preferred.year, preferred.posterUrl, preferred.seasonCount]);
-  const withFallback = online?.movieId === movie.movieId ? { ...enriched, ...online.details } : enriched;
-  return tmdb?.movieId === movie.movieId && tmdb.details ? { ...withFallback, ...tmdb.details } : withFallback;
+/** Shared display-only data across cards, editors and search. */
+export function useTitleDetails(movie: Movie): ResolvedMovie {
+  const changed = useSyncExternalStore(subscribe, () => version, () => 0);
+  useEffect(() => { void ensureDetails(movie).catch(() => {}); }, [movie.movieId, movie.mediaType, changed]);
+  return resolved(movie);
 }

@@ -22,7 +22,7 @@ async function getIdentity(id: number) {
 export async function titleDetails(ids: number[], origin: string) {
   const token = (env as unknown as { TMDB_API_READ_TOKEN?: string }).TMDB_API_READ_TOKEN;
   const cache = (caches as unknown as { default?: Cache }).default;
-  const key = (id: number) => new Request(new URL(`/__public-title-cache/tmdb-v1/${id}`, origin));
+  const key = (id: number) => new Request(new URL(`/__public-title-cache/tmdb-v2/${id}`, origin));
   return getTmdbTitleDetails(ids, { token, getIdentity, cache: cache ? {
     get: async id => { const response = await cache.match(key(id)); return response ? response.json() : null; },
     set: async (id, details, ttl) => { await cache.put(key(id), Response.json(details, { headers: { 'Cache-Control': `public, max-age=${ttl}` } })); },
