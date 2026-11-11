@@ -97,8 +97,11 @@ function blendWithFallback(base, content, weight, seen) {
   return normalizedBase;
 }
 
-/** Ignore retired IDs and malformed entries; the last valid rating wins. @param {Model} model @param {Rating[]} ratings */
-function userProfile(model, ratings) {
+/** Ignore retired IDs and malformed entries; the last valid rating wins.
+ * Favorites are explicit positive inputs, not synthetic saved ratings.
+ * @param {Model} model @param {Rating[]} ratings @param {Iterable<number>} favoriteIds
+ */
+function userProfile(model, ratings, favoriteIds) {
   const values = new Map();
   for (const entry of ratings) {
     if (entry && isValidRating(entry.rating) && model.itemIndex.has(entry.movieId)) {
@@ -106,29 +109,37 @@ function userProfile(model, ratings) {
     }
   }
   const seen = new Set(values.keys());
-  const likedRows = [...values.entries()].filter(([, rating]) => rating >= 4).map(([row]) => row);
-  return { seen, likedRows };
+  const liked = new Set([...values.entries()].filter(([, rating]) => rating >= 4).map(([row]) => row));
+  const favorites = new Set();
+  for (const id of favoriteIds) {
+    if (!Number.isSafeInteger(id) || id < 1 || !model.itemIndex.has(id)) continue;
+    const row = model.itemIndex.get(id);
+    favorites.add(row); liked.add(row); seen.add(row);
+  }
+  return { seen, likedRows: [...liked], ratingsCount: values.size, hasFavorites: favorites.size > 0 };
 }
 
-/** @param {Movie} movie @param {Movie[]} likedMovies @param {boolean} personalized */
-function recommendationReason(movie, likedMovies, personalized) {
+/** @param {Movie} movie @param {Movie[]} likedMovies @param {boolean} personalized @param {boolean} hasFavorites */
+function recommendationReason(movie, likedMovies, personalized, hasFavorites) {
   if (!personalized) return "A popular starting point. Rate a few favorites to make this yours.";
   const shared = movie.genres.filter((genre) => likedMovies.some((liked) => liked.genres.includes(genre)));
-  if (shared.length) return `Shares ${shared.slice(0, 2).join(" and ").toLowerCase()} with films you rated highly.`;
+  if (shared.length) return `Shares ${shared.slice(0, 2).join(" and ").toLowerCase()} with films you ${hasFavorites ? 'rated highly or favorited' : 'rated highly'}.`;
   return "A pick from your taste profile, with plot, cast, and IMDb signals.";
 }
 
 /**
  * The original model uses ratings >=4 as likes. Lower ratings exclude a film
  * from future recommendations; they do not contribute a negative preference.
+ * An explicit Favorite also enters the positive profile at any saved score.
  * Full candidate ranking for shared-list aggregation.
  * @param {Model} model @param {Rating[]} ratings
  * @param {ReadonlySet<number>} [eligibleIds] Optional output-only candidate filter;
  * profile features and unseen normalization retain the complete frozen catalog.
+ * @param {Iterable<number>} [favoriteIds] Explicit positive catalog identities.
  */
-export function rankMovies(model, ratings, eligibleIds) {
+export function rankMovies(model, ratings, eligibleIds, favoriteIds = []) {
   const { metadata } = model;
-  const { seen, likedRows } = userProfile(model, ratings);
+  const { seen, likedRows, ratingsCount, hasFavorites } = userProfile(model, ratings, favoriteIds);
   const personalized = likedRows.length > 0;
   let scores = new Float64Array(metadata.itemCount);
   if (personalized) {
@@ -160,20 +171,21 @@ export function rankMovies(model, ratings, eligibleIds) {
     movies: indices.map((index) => ({
       ...metadata.movies[index],
       score: scores[index],
-      reason: recommendationReason(metadata.movies[index], likedMovies, personalized),
+      reason: recommendationReason(metadata.movies[index], likedMovies, personalized, hasFavorites),
     })),
     mode: personalized ? "personalized" : "starter",
     likes: likedRows.length,
-    ratingsCount: seen.size,
+    ratingsCount,
   };
 }
 
 /** Return a bounded personal shelf, preserving the frozen model's ranking.
  * @param {Model} model @param {Rating[]} ratings @param {number} [limit]
  * @param {ReadonlySet<number>} [eligibleIds]
+ * @param {Iterable<number>} [favoriteIds]
  */
-export function recommend(model, ratings, limit = 12, eligibleIds) {
-  const result = rankMovies(model, ratings, eligibleIds);
+export function recommend(model, ratings, limit = 12, eligibleIds, favoriteIds = []) {
+  const result = rankMovies(model, ratings, eligibleIds, favoriteIds);
   return { ...result, movies: result.movies.slice(0, Math.max(0, Math.min(48, Math.trunc(limit)))) };
 }
 

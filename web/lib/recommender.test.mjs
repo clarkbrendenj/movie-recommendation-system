@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createModel, recommend, rankMovies, browseMovies, isValidRating } from "./recommender.mjs";
+import { aggregateGroupRankings } from './collaboration-policy.mjs';
 
 function sparse(name, rows) {
   const indptr = [0];
@@ -67,6 +68,44 @@ test("lower ratings alone keep starter recommendations and exclude the rated mov
   const result = recommend(fixture(), [{ movieId: 3, rating: 3.5 }], 10);
   assert.equal(result.mode, "starter");
   assert.deepEqual(result.movies.map((movie) => movie.movieId), [2, 1, 4]);
+});
+
+test('a low-rated Favorite supplies the same positive movie signal without changing saved feedback', () => {
+  const model = fixture(), ratings = [{ movieId: 1, rating: 1.5 }, { movieId: 4, rating: 1 }];
+  const previous = structuredClone(ratings);
+  const actual = rankMovies(model, ratings, undefined, [1]);
+  const expected = rankMovies(model, [{ movieId: 1, rating: 4 }, { movieId: 4, rating: 1 }]);
+  assert.equal(actual.mode, 'personalized');
+  assert.equal(actual.likes, 1); assert.equal(actual.ratingsCount, 2);
+  assert.deepEqual(actual.movies.map(({movieId,score}) => ({movieId,score})), expected.movies.map(({movieId,score}) => ({movieId,score})));
+  assert.ok(actual.movies.every(movie => ![1,4].includes(movie.movieId)));
+  assert.ok(actual.movies.some(movie => movie.reason.includes('favorited')));
+  assert.deepEqual(ratings, previous);
+  assert.deepEqual(rankMovies(model, ratings, undefined, []), rankMovies(model, ratings));
+  assert.equal(rankMovies(model, ratings).mode, 'starter', 'Removing the override restores the saved low score policy.');
+});
+
+test('movie Favorites deduplicate rated positives and permit unrated favorites without inventing ratings', () => {
+  const model = fixture(), rated = [{movieId:1,rating:4}];
+  const baseline = recommend(model, rated, 10);
+  const duplicate = recommend(model, rated, 10, undefined, [1,1,1]);
+  assert.equal(duplicate.likes, 1);
+  assert.deepEqual(duplicate.movies.map(movie => [movie.movieId,movie.score]), baseline.movies.map(movie => [movie.movieId,movie.score]));
+  const unrated = recommend(model, [], 10, undefined, new Set([1]));
+  assert.equal(unrated.mode, 'personalized'); assert.equal(unrated.likes, 1); assert.equal(unrated.ratingsCount, 0);
+  assert.deepEqual(unrated.movies.map(movie => [movie.movieId,movie.score]), baseline.movies.map(movie => [movie.movieId,movie.score]));
+  assert.deepEqual(rankMovies(model, [], undefined, [99999,1_000_000_001,NaN,1.2,'1',null]), rankMovies(model, []));
+});
+
+test('Together combines distinct member Favorite profiles over the complete mutually eligible pool', () => {
+  const model = fixture(), eligibleIds = new Set([1,2,3,4]);
+  const first = rankMovies(model, [], eligibleIds, [1]);
+  const second = rankMovies(model, [], eligibleIds, [4]);
+  assert.equal(first.ratingsCount, 0); assert.equal(second.ratingsCount, 0);
+  assert.notDeepEqual(first.movies.map(movie => [movie.movieId,movie.score]), second.movies.map(movie => [movie.movieId,movie.score]));
+  const result = aggregateGroupRankings([first.movies, second.movies], { eligibleIds, blockedIds:new Set([1,4]), limit:12 });
+  assert.deepEqual(new Set(result.map(movie => movie.movieId)), new Set([2,3]));
+  assert.ok(result.every(movie => movie.reason === 'Balances the tastes of everyone on this list.'));
 });
 
 test("duplicate ratings use the last value and unknown catalog IDs do not create likes", () => {

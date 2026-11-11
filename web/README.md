@@ -30,20 +30,37 @@ responses are private and never shared through caches. No LLM or OpenAI API key
 is used for accounts, rating, or recommendation requests.
 
 New scores start at **5.0/10**; editing a saved rating starts at its existing
-value. The independent heart records a **Like** at any score, including a low
-score, without changing that score or the frozen recommendation model inputs.
-Like, Watched, and Add to list controls appear on title cards and rating screens.
+value. The heart records a **Favorite** at any score, including a low score.
+Favorites explicitly enter the corresponding movie or TV model's positive
+preference profile without changing the saved rating or trained weights.
+Favorite, Watched, and Add to list controls appear on title cards and rating screens.
 The dark cinema theme uses charcoal and wine surfaces, carpet burgundy, gold,
-neon rose Likes, and cyan Watched controls.
+neon rose Favorites, and cyan Watched controls.
 
 Saving a rating marks a title watched. A title can also be marked watched without
 giving it a score; watched titles are excluded from personal and Together picks.
-**Remove rating** clears only the score and preserves Like and Watched. Marking
+**Remove rating** clears only the score and preserves Favorite and Watched. Marking
 a rated title unwatched asks for confirmation and atomically clears both the
-score and watched flag, preserving its Like. The rating queue's Haven't seen it
+score and watched flag, preserving its Favorite. The rating queue's Haven't seen it
 action supports the same correction. Migration `0002_title_states.sql` adds the
 separate per-account flags and backfills watched flags for existing app-owned
 ratings without changing any saved scores or inventing viewing dates.
+
+A global **Posters / Compact list** toggle switches title collections, rating
+queues/search, saved lists, Together picks, and rating history to dense table
+rows. The preference is saved in this browser and follows navigation. Title
+hover or keyboard focus opens a cover preview; a separate preview button also
+works on touch screens. Compact rating mode opens the same vertical fader in a
+dialog and retains Save & Next behavior and 0.1-point scores.
+
+Existing hearts become Favorites without a database migration; the stored API
+field remains `liked` for compatibility. A Favorite is a binary positive signal,
+including without a score, and is counted once if the rating is already high.
+Removing a Favorite restores threshold-based behavior; it does not remove a
+high score's positive signal. Favorites are not automatically marked watched
+and are excluded from recommending themselves. Together inference uses each
+member's own Favorites and excludes the union of rated, watched, and favorite
+titles without returning anyone else's activity.
 
 The current private Sites deployment retains the host's outer access gate at
 the owner's request. That gate is separate from Afterglow accounts. Independent
@@ -51,12 +68,14 @@ hosting below removes the platform gate; app accounts continue to protect data.
 Older ratings keyed to platform identities remain stored unchanged. They are
 not automatically claimed by new accounts: an import must verify ownership.
 
-All rated movies are excluded from future recommendations. Ratings of **8–10**
-contribute to the preference profile, following the evaluated model.
-With no liked movies, the app shows training-popularity starter picks, with IMDb
+All rated movies are excluded from future recommendations. Ratings of **8–10**,
+or an explicit **Favorite** at any score, contribute to the preference profile.
+With no positive preferences, the app shows training-popularity starter picks, with IMDb
 quality and movie ID used as deterministic secondary ordering. Lower ratings
 exclude movies but do not create a negative preference vector. Rating a movie
 does not retrain the global collaborative model or modify another user's taste.
+The recorded offline benchmark scores describe the original rating-only policy;
+the explicit Favorite override has not been assigned a new benchmark score.
 
 The app accepts ratings from **1.0 to 10.0 in steps of 0.1**. A vertical
 red-to-green fader and changing reaction show the selected value beside the

@@ -9,6 +9,7 @@ import { AddToListDialog, ListsScreen } from "../components/afterglow/lists";
 import { useTmdbEnabled } from "../components/afterglow/metadata";
 import { TmdbCredit } from "../components/afterglow/TmdbCredit";
 import { TitleActivityProvider } from "../components/afterglow/activity";
+import { CollectionViewProvider, CollectionViewToggle } from "../components/afterglow/collection-view";
 
 const NAV = [
   { id: 'movies', label: 'Movie recommendations', icon: Film },
@@ -61,14 +62,15 @@ export default function Home() {
     catch (failure) { setToast(message(failure)); }
     finally { setLoggingOut(false); if (profile.current) profile.current.open = false; }
   }
-  return <TitleActivityProvider key={accountKey} user={user} ratings={ratings} states={titleStates} onAuth={signIn} onCommit={change => void saved(change)}><div className="picture-house">
+  return <CollectionViewProvider><TitleActivityProvider key={accountKey} user={user} ratings={ratings} states={titleStates} onAuth={signIn} onCommit={change => void saved(change)}><div className="picture-house">
     <a href="#main-content" className="skip-link">Skip to content</a>
     <header className="house-header"><div className="header-inner"><button className="wordmark" onClick={() => navigate('movies')} aria-label="Afterglow home"><span className="brand-emblem"><Star size={30} strokeWidth={1} /></span><span><strong>afterglow<span className="brand-dot">✦</span></strong><small>YOUR PRIVATE PICTURE HOUSE</small></span></button><div className="header-right"><span className="header-welcome">GOOD STORIES. GREAT COMPANY.</span>{user ? <details className="profile-menu" ref={profile}><summary><span className="avatar">{initials(user.displayName)}</span><span>{user.displayName}</span><ChevronDown size={14} /></summary><div className="profile-dropdown"><span className="profile-caption">@{user.username}</span><button onClick={() => navigate('history')}><Star size={15} />My ratings<span>{ratings.size}</span></button><button onClick={() => navigate('together')}><UsersRound size={15} />My friends</button><button onClick={() => void logout()} disabled={loggingOut}><LogOut size={15} />{loggingOut ? 'Signing out…' : 'Sign out'}</button></div></details> : <button className="header-signin" onClick={signIn} disabled={accountLoading}><Ticket size={17} />Sign in <ArrowUpRight size={15} /></button>}</div></div><div className="nav-wrap"><nav aria-label="Main navigation" className="house-nav">{NAV.map(({ id, label, icon: Icon }) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => navigate(id)}><Icon size={16} strokeWidth={1.6} /><span>{label}</span></button>)}</nav></div></header>
     <main id="main-content" className="page-content" tabIndex={-1}>
+      <CollectionViewToggle />
       {accountError && <ErrorNotice text={accountError} retry={() => { setAccountLoading(true); void refreshAccount().catch(() => {}); }} />}
       {accountLoading ? <Busy text="Opening the picture house…" /> : <div className="screen-enter" key={`${accountKey}:${tab}`}>
         {(tab === 'movies' || tab === 'series') && <DiscoverScreen key={`${accountKey}:${tab}`} kind={tab} user={user} ratings={ratings} onRate={setEditor} onAdd={addToList} onNavigate={navigate} revision={revision} />}
-        {(tab === 'rate-movies' || tab === 'rate-series') && <RatingScreen key={`${accountKey}:${tab}`} kind={tab === 'rate-movies' ? 'movies' : 'series'} user={user} ratings={ratings} onAuth={signIn} onAdd={addToList} onToast={setToast} />}
+        {(tab === 'rate-movies' || tab === 'rate-series') && <RatingScreen key={`${accountKey}:${tab}`} kind={tab === 'rate-movies' ? 'movies' : 'series'} user={user} ratings={ratings} onAuth={signIn} onAdd={addToList} onToast={setToast} overlayOpen={authOpen || Boolean(addTitle) || Boolean(editor)} />}
         {(tab === 'watchlists' || tab === 'together') && <ListsScreen key={`${accountKey}:${tab}`} kind={tab === 'watchlists' ? 'watchlist' : 'together'} user={user} ratings={ratings} onAuth={signIn} onRate={setEditor} onAdd={addToList} onToast={setToast} onNavigate={navigate} revision={revision} />}
         {tab === 'history' && <HistoryScreen key={`${accountKey}:history`} user={user} ratings={ratings} revision={revision} onAuth={signIn} onRate={setEditor} onAdd={addToList} />}
       </div>}
@@ -78,5 +80,5 @@ export default function Home() {
     {authOpen && <AuthDialog key={`auth:${accountKey}`} onClose={() => setAuthOpen(false)} onComplete={signedIn} />}
     {editor && <RatingDialog key={`${accountKey}:${editor.movieId}`} movie={editor} initial={ratings.get(editor.movieId) ?? 5} user={user} onClose={() => setEditor(null)} onAuth={signIn} onAdd={() => addToList(editor)} />}
     {addTitle && user && <AddToListDialog key={`${accountKey}:${addTitle.movieId}`} movie={addTitle} onClose={() => setAddTitle(null)} onAdded={() => { setAddTitle(null); setRevision(value => value + 1); setToast('Saved to your watchlist. A future favorite awaits.'); }} />}
-  </div></TitleActivityProvider>;
+  </div></TitleActivityProvider></CollectionViewProvider>;
 }

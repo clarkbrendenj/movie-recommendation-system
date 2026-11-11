@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { ArrowRight, Check, Clapperboard, LoaderCircle, Star, Trash2, X } from "lucide-react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { ArrowRight, Check, Clapperboard, Image, LoaderCircle, Star, Trash2, X } from "lucide-react";
 import { api, message, mediaLabel, titleOf, type MediaType, type Movie, type User } from "./types";
 import { useTitleDetails } from "./metadata";
 import { RemoveRatingButton, TitleActions, useTitleActivity } from "./activity";
+import { useCollectionView } from "./collection-view";
 import "./rating-experience.css";
 
 const PALETTES = [["#5a2634", "#f4dfb7", "#b88c4e"], ["#233a3d", "#f5e8c8", "#a87945"], ["#74603c", "#fff1d0", "#391d26"], ["#30354b", "#eee2c2", "#ac7452"], ["#513c49", "#f8e8c3", "#c2a36f"], ["#3c4b3a", "#f2dfb7", "#ac654b"]];
@@ -52,8 +54,50 @@ export function MovieCard({ movie, rating, onRate, onAdd, onRemove }: { movie: M
   movie = useTitleDetails(movie);
   return <article className="movie-card"><button className="poster-button" onClick={() => onRate(movie)} aria-label={`Rate ${titleOf(movie)}`}><Poster movie={movie} /><span className="poster-action"><Star size={18} /> {rating ? 'Edit your rating' : 'Give your take'}</span></button><div className="card-meta"><span>{mediaLabel(movie)}</span><span>{movie.year || 'Year unknown'}</span></div><h3><button onClick={() => onRate(movie)}>{titleOf(movie)}</button></h3><p className="card-genres">{movie.genres.filter(genre => genre !== '(no genres listed)').slice(0, 2).join(' / ') || 'A new story awaits'}</p>{movie.reason && <p className="card-reason">{movie.reason}</p>}<div className="card-actions"><button onClick={() => onRate(movie)} className={rating ? 'is-rated' : ''}><Star size={14} fill={rating ? 'currentColor' : 'none'} />{rating ? `${rating.toFixed(1)}/10` : 'Rate'}</button>{onRemove && <button aria-label={`Remove ${titleOf(movie)} from this watchlist`} onClick={onRemove}><Trash2 size={14} /> Remove from list</button>}</div><TitleActions movie={movie} onAdd={() => onAdd(movie)} compact /></article>;
 }
-export function MovieGrid({ movies, ratings, onRate, onAdd, onRemove }: { movies: Movie[]; ratings: Map<number, number>; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void; onRemove?: (movie: Movie) => void }) { return <div className="movie-grid">{movies.map(movie => <MovieCard key={movie.movieId} movie={movie} rating={ratings.get(movie.movieId)} onRate={onRate} onAdd={onAdd} onRemove={onRemove ? () => onRemove(movie) : undefined} />)}</div>; }
-export function SkeletonGrid() { return <div className="movie-grid" aria-busy="true" aria-label="Loading titles">{Array.from({ length: 8 }, (_, index) => <div className="skeleton-card" key={index}><div /><span /><span /></div>)}</div>; }
+type MovieCollectionProps = { movies: Movie[]; ratings: Map<number, number>; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void; onRemove?: (movie: Movie) => void };
+
+/** The poster subtree mounts only while requested, keeping compact lists light. */
+function CoverPreviewTitle({ movie, onRate, disabled }: { movie: Movie; onRate: () => void; disabled?: boolean }) {
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null), [pinned, setPinned] = useState(false);
+  const anchor = useRef<HTMLSpanElement>(null), previewId = useId(), title = titleOf(movie);
+  function close() { setPosition(null); setPinned(false); }
+  function open(element: HTMLElement, pin = false) {
+    const rect = element.getBoundingClientRect(), width = 150, height = 250, margin = 12;
+    const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
+    const top = rect.bottom + height + margin <= window.innerHeight ? rect.bottom + 8 : Math.max(margin, rect.top - height - 8);
+    setPosition({ left, top }); setPinned(pin);
+  }
+  useEffect(() => {
+    if (!position) return;
+    function outside(event: PointerEvent) { if (!anchor.current?.contains(event.target as Node)) close(); }
+    function escape(event: KeyboardEvent) { if (event.key === 'Escape') close(); }
+    window.addEventListener('scroll', close, true); window.addEventListener('resize', close);
+    document.addEventListener('pointerdown', outside); document.addEventListener('keydown', escape);
+    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
+  }, [Boolean(position)]);
+  return <span className="collection-title-cell" ref={anchor} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) close(); }}>
+    <button type="button" className="collection-title-trigger" onClick={() => { close(); onRate(); }} disabled={disabled} aria-describedby={position ? previewId : undefined}
+      onMouseEnter={event => { if (!pinned) open(event.currentTarget); }} onMouseLeave={() => { if (!pinned) close(); }} onFocus={event => { if (!pinned) open(event.currentTarget); }}>{title}</button>
+    <button type="button" className="collection-preview-trigger" aria-label={`${pinned ? 'Hide' : 'Preview'} cover: ${title}`} aria-pressed={pinned} onClick={event => { if (pinned) close(); else open(event.currentTarget, true); }}><Image size={16} /></button>
+    {position && createPortal(<div className="collection-cover-preview" role="tooltip" id={previewId} style={{ left: position.left, top: position.top }}><Poster movie={movie} /><span className="collection-cover-caption">{title}{movie.year ? ` (${movie.year})` : ''}</span></div>, document.body)}
+  </span>;
+}
+
+export function MovieTable({ movies, ratings, onRate, onAdd, onRemove, currentMovieId, disabled = false, caption = 'Movies and whole TV series' }: MovieCollectionProps & { currentMovieId?: number; disabled?: boolean; caption?: string }) {
+  return <div className="collection-table-scroll" role="region" aria-label={caption} tabIndex={0}><table className="collection-table"><caption className="sr-only">{caption}. Hover or focus a title to preview its cover; select its title or rating to rate it.</caption><thead><tr><th scope="col">Title</th><th scope="col">Year</th><th scope="col">Type</th><th scope="col">Genres</th><th scope="col">Your rating</th><th scope="col">Actions</th></tr></thead><tbody>{movies.map(movie => {
+    const rating = ratings.get(movie.movieId);
+    return <tr key={movie.movieId} className={currentMovieId === movie.movieId ? 'collection-row-current' : undefined}><th scope="row"><CoverPreviewTitle movie={movie} onRate={() => onRate(movie)} disabled={disabled} /></th><td>{movie.year || '—'}</td><td>{mediaLabel(movie)}</td><td>{movie.genres.filter(genre => genre !== '(no genres listed)').slice(0, 2).join(' / ') || '—'}</td><td><button type="button" className={`collection-score ${rating !== undefined ? 'is-rated' : ''}`} onClick={() => onRate(movie)} disabled={disabled} aria-label={`${rating === undefined ? 'Rate' : `Edit ${rating.toFixed(1)} out of 10 rating for`} ${titleOf(movie)}`}>{rating === undefined ? 'Rate' : `${rating.toFixed(1)} / 10`}</button></td><td><div className="collection-row-actions"><TitleActions movie={movie} onAdd={() => onAdd(movie)} compact disabled={disabled} />{onRemove && <button type="button" className="collection-remove" disabled={disabled} aria-label={`Remove ${titleOf(movie)} from this list`} onClick={() => onRemove(movie)}><Trash2 size={15} /><span>Remove</span></button>}</div></td></tr>;
+  })}</tbody></table></div>;
+}
+
+export function MovieGrid(props: MovieCollectionProps) {
+  const { view } = useCollectionView();
+  return view === 'compact' ? <MovieTable {...props} /> : <div className="movie-grid">{props.movies.map(movie => <MovieCard key={movie.movieId} movie={movie} rating={props.ratings.get(movie.movieId)} onRate={props.onRate} onAdd={props.onAdd} onRemove={props.onRemove ? () => props.onRemove?.(movie) : undefined} />)}</div>;
+}
+export function SkeletonGrid() {
+  const { view } = useCollectionView();
+  return view === 'compact' ? <div className="collection-table-scroll collection-table-loading" aria-busy="true" aria-label="Loading titles"><table className="collection-table"><thead><tr>{['Title', 'Year', 'Type', 'Genres', 'Your rating', 'Actions'].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>{Array.from({ length: 6 }, (_, index) => <tr key={index}><td colSpan={6}><span className="collection-loading-line">Loading titles…</span></td></tr>)}</tbody></table></div> : <div className="movie-grid" aria-busy="true" aria-label="Loading titles">{Array.from({ length: 8 }, (_, index) => <div className="skeleton-card" key={index}><div /><span /><span /></div>)}</div>;
+}
 
 function feeling(value: number) {
   if (value < 2.5) return { emoji: '😖', label: 'Not for me' };

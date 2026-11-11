@@ -74,7 +74,7 @@ export function TitleActions({ movie, onAdd, disabled = false, compact = false }
   const [error, setError] = useState(""), [confirm, setConfirm] = useState(false);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; setError(""); setConfirm(false); return () => { alive.current = false; }; }, [movie.movieId]);
-  const state = activity.states.get(movie.movieId), liked = state?.liked || false;
+  const state = activity.states.get(movie.movieId), favorite = state?.liked || false;
   const watched = state?.watched ?? activity.ratings.has(movie.movieId);
   const pending = activity.pending.has(movie.movieId), busy = disabled || pending;
   async function update(patch: Partial<Pick<TitleState, "liked" | "watched">>) {
@@ -89,11 +89,11 @@ export function TitleActions({ movie, onAdd, disabled = false, compact = false }
   return <div className={`title-activity ${compact ? "title-activity-compact" : ""}`}>
     <div className={`title-actions ${compact ? "title-actions-compact" : ""}`} role="group" aria-label={`Your activity for ${titleOf(movie)}`}>
       <button type="button" className={`title-action ${watched ? "is-watched is-active" : ""}`} aria-pressed={watched} aria-label={`${watched ? "Mark unwatched" : "Mark watched"}: ${titleOf(movie)}`} onClick={watch} disabled={busy} title={watched ? "Mark unwatched" : "Mark watched without giving a score"}><Eye size={compact ? 16 : 21} /><span>{watched ? "Watched" : "Mark watched"}</span></button>
-      <button type="button" className={`title-action ${liked ? "is-liked is-active" : ""}`} aria-pressed={liked} aria-label={`${liked ? "Unlike" : "Like"}: ${titleOf(movie)}`} onClick={() => void update({ liked: !liked })} disabled={busy} title="Like this title independently of your score"><Heart size={compact ? 16 : 21} fill={liked ? "currentColor" : "none"} /><span>{liked ? "Liked" : "Like"}</span></button>
+      <button type="button" className={`title-action ${favorite ? "is-favorite is-active" : ""}`} aria-pressed={favorite} aria-label={`${favorite ? "Remove favorite" : "Favorite"}: ${titleOf(movie)}`} onClick={() => void update({ liked: !favorite })} disabled={busy} title="Favorites count as positive preferences, even with a low rating"><Heart size={compact ? 16 : 21} fill={favorite ? "currentColor" : "none"} /><span>{favorite ? "Favorited" : "Favorite"}</span></button>
       {movie.mediaType !== "other" && <button type="button" className="title-action" onClick={onAdd} disabled={busy}><BookmarkPlus size={compact ? 16 : 21} /><span>Add to list</span></button>}
     </div>
-    {!compact && <p className="title-action-note">Like a title at any score. Your heart does not change your rating.</p>}
-    {confirm && <div className="title-action-confirm" role="group" aria-label="Confirm marking this title unwatched"><p>Marking this title unwatched also removes your saved rating. Your Like stays as it is.</p><button type="button" className="title-action-remove" onClick={() => void update({ watched: false })} disabled={busy}>{pending ? <LoaderCircle size={15} className="spinning" /> : <Trash2 size={15} />}Remove rating &amp; mark unwatched</button><button type="button" className="text-button" onClick={() => setConfirm(false)} disabled={busy}>Cancel</button></div>}
+    {!compact && <p className="title-action-note">Favorites count as positive preferences, even with a low rating. Your score stays unchanged.</p>}
+    {confirm && <div className="title-action-confirm" role="group" aria-label="Confirm marking this title unwatched"><p>Marking this title unwatched also removes your saved rating. Your favorite stays as it is.</p><button type="button" className="title-action-remove" onClick={() => void update({ watched: false })} disabled={busy}>{pending ? <LoaderCircle size={15} className="spinning" /> : <Trash2 size={15} />}Remove rating &amp; mark unwatched</button><button type="button" className="text-button" onClick={() => setConfirm(false)} disabled={busy}>Cancel</button></div>}
     {error && <p className="title-action-error" role="alert">{error}</p>}
   </div>;
 }

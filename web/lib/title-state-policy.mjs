@@ -1,12 +1,12 @@
-/** Independent expressive states; never translated into synthetic ratings. */
+/** The legacy liked field stores Favorites; score and watched state stay separate. */
 export function validateTitleStatePatch(body) {
   const patch = {};
   for (const field of ['liked', 'watched']) {
     if (!Object.hasOwn(body, field)) continue;
-    if (typeof body[field] !== 'boolean') throw new TypeError('Like and Watched must be true or false.');
+    if (typeof body[field] !== 'boolean') throw new TypeError('Favorite and Watched must be true or false.');
     patch[field] = body[field];
   }
-  if (!Object.keys(patch).length) throw new TypeError('Choose Like or Watched to update.');
+  if (!Object.keys(patch).length) throw new TypeError('Choose Favorite or Watched to update.');
   return patch;
 }
 

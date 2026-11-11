@@ -17,15 +17,18 @@ export async function GET(request: Request) {
     const limit = params.has("limit") ? positiveInteger(Number(params.get("limit")), "limit", 48) : 12;
     const user = await getAppUser(request);
     const [ratings, states] = user ? await Promise.all([getUserRatings(user.userId), getUserTitleStates(user.userId)]) : [[], []];
+    // The legacy liked flag is now the explicit Favorite override. Scores remain intact.
+    const favoriteIds = states.filter(state => state.liked).map(state => state.movieId);
     if (type === "series") {
-      const result = excludeWatched(rankSeries(await getTvModel(), ratings), states, limit);
+      const result = excludeWatched(rankSeries(await getTvModel(), ratings, favoriteIds), states, limit);
       return json({ ...result, series: result.movies, sections: { series: result }, type });
     }
     const [model, tvModel, overlay] = await Promise.all([getModel(), type === "both" ? getTvModel() : Promise.resolve(null), getMovieUnitOverlay()]);
-    const result = excludeWatched(rankMovies(model, ratings, movieCandidateIds(model.metadata, overlay)), states, limit);
+    const eligibleIds = movieCandidateIds(model.metadata, overlay);
+    const result = excludeWatched(rankMovies(model, ratings, eligibleIds, favoriteIds.filter(id => eligibleIds.has(id))), states, limit);
     const movies = { ...result, movies: result.movies.map((item) => movieCard(item, overlay)) };
     if (tvModel) {
-      const series = excludeWatched(rankSeries(tvModel, ratings), states, limit);
+      const series = excludeWatched(rankSeries(tvModel, ratings, favoriteIds), states, limit);
       return json({ ...movies, series: series.movies, sections: { movies, series }, type });
     }
     return json({ ...movies, sections: { movies }, type });

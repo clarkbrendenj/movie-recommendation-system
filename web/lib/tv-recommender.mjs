@@ -100,8 +100,10 @@ function normalized(scores, seen, columns) {
   return result;
 }
 
-/** Last valid rating wins; unknown MovieLens IDs and vetoed units do not enter a profile. @param {TvModel} model @param {Rating[]} ratings */
-function profile(model, ratings) {
+/** Last valid rating wins; unknown MovieLens IDs and vetoed units do not enter a profile.
+ * @param {TvModel} model @param {Rating[]} ratings @param {Iterable<number>} favoriteIds
+ */
+function profile(model, ratings, favoriteIds) {
   const values = new Map();
   for (const entry of ratings) {
     const row = entry ? model.itemIndex.get(entry.movieId) : undefined;
@@ -109,13 +111,24 @@ function profile(model, ratings) {
   }
   const seen = new Set(model.metadata.items.flatMap((item, row) => item.eligible ? [] : [row]));
   for (const row of values.keys()) seen.add(row);
-  return { seen, liked: [...values].filter(([, rating]) => rating >= 4).map(([row]) => row), ratingsCount: values.size };
+  const liked = new Set([...values].filter(([, rating]) => rating >= 4).map(([row]) => row));
+  const favorites = new Set();
+  for (const id of favoriteIds) {
+    if (!Number.isSafeInteger(id) || id < 1) continue;
+    const row = model.itemIndex.get(id), item = row === undefined ? undefined : model.metadata.items[row];
+    // Favorites come from the whole-series UI, never episode/season/context units.
+    if (!item?.eligible || !item.candidate || item.mediaType !== 'series') continue;
+    favorites.add(row); liked.add(row); seen.add(row);
+  }
+  return { seen, liked: [...liked], ratingsCount: values.size, hasFavorites: favorites.size > 0 };
 }
 
-/** Full candidate ranking for shared lists. @param {TvModel} model @param {Rating[]} ratings */
-export function rankSeries(model, ratings) {
+/** Full candidate ranking for shared lists. Favorites override a low saved score.
+ * @param {TvModel} model @param {Rating[]} ratings @param {Iterable<number>} [favoriteIds]
+ */
+export function rankSeries(model, ratings, favoriteIds = []) {
   const { metadata, candidates } = model;
-  const current = profile(model, ratings);
+  const current = profile(model, ratings, favoriteIds);
   const personal = new Float64Array(metadata.itemCount);
   const popularity = Float64Array.from(metadata.items, item => item.popularity);
   if (current.liked.length) {
@@ -141,7 +154,7 @@ export function rankSeries(model, ratings) {
     || metadata.items[left].movieId - metadata.items[right].movieId);
   return {
     movies: ranked.map(row => ({ ...metadata.items[row], score: scores[row],
-      reason: current.liked.length ? "Based on titles you rated highly, balanced with popular series."
+      reason: current.liked.length ? `Based on titles you ${current.hasFavorites ? 'rated highly or favorited' : 'rated highly'}, balanced with popular series.`
         : "A popular series to start with. Rate series you have seen to make this yours." })),
     mode: current.liked.length ? "personalized" : "starter",
     likes: current.liked.length,
@@ -149,9 +162,9 @@ export function rankSeries(model, ratings) {
   };
 }
 
-/** @param {TvModel} model @param {Rating[]} ratings @param {number} [limit] */
-export function recommendSeries(model, ratings, limit = 12) {
-  const result = rankSeries(model, ratings);
+/** @param {TvModel} model @param {Rating[]} ratings @param {number} [limit] @param {Iterable<number>} [favoriteIds] */
+export function recommendSeries(model, ratings, limit = 12, favoriteIds = []) {
+  const result = rankSeries(model, ratings, favoriteIds);
   const size = Number.isFinite(limit) ? Math.max(0, Math.min(48, Math.trunc(limit))) : 12;
   return { ...result, movies: result.movies.slice(0, size) };
 }

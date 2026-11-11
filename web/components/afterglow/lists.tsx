@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { ArrowLeft, ArrowRight, Bookmark, Check, Copy, LoaderCircle, Plus, RefreshCw, Trash2, Users, X } from "lucide-react";
 import { api, EMPTY_FRIENDS, initials, mediaKind, message, titleOf, type Friend, type Friends, type MediaType, type Movie, type Recommendations, type SavedList, type Tab, type User } from "./types";
 import { AuthGate, Busy, Empty, ErrorNotice, Modal, MovieGrid } from "./ui";
+import { useCollectionView } from "./collection-view";
 import "./list-view.css";
 
 type ScreenProps = { kind: "watchlist" | "together"; user: User | null; ratings: Map<number, number>; onAuth: () => void; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void; onToast: (text: string) => void; onNavigate: (tab: Tab) => void; revision: number };
@@ -54,6 +55,7 @@ export function ListsScreen(props: ScreenProps) {
 }
 
 function ListsSession({ kind, user, ratings, onRate, onAdd, onToast, onNavigate, revision }: ScreenProps & { user: User }) {
+  const { view } = useCollectionView();
   const [lists, setLists] = useState<SavedList[]>([]), [selected, setSelected] = useState<string | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [detail, setDetail] = useState<{ list: SavedList; items: Movie[] } | null>(null), [detailLoading, setDetailLoading] = useState(false), [detailError, setDetailError] = useState(""), [detailRevision, setDetailRevision] = useState(0);
   const [recommendations, setRecommendations] = useState<Recommendations | null>(null), [recLoading, setRecLoading] = useState(false), [recError, setRecError] = useState("");
@@ -134,7 +136,7 @@ function ListsSession({ kind, user, ratings, onRate, onAdd, onToast, onNavigate,
       {detailError ? <ErrorNotice text={detailError} retry={() => setDetailRevision(value => value + 1)} /> : detailLoading ? <Busy text="Opening this list…" /> : shown && <>
         {kind === "together" && <>
           <div className="list-members">{shown.members.map(member => <span className="member-row" key={member.userId}><span className="member-avatar">{initials(member.displayName)}</span><span>{member.displayName}{member.userId === user.id ? " (you)" : ""}</span></span>)}</div>
-          <p className="list-description">Picks balance everyone’s ranked preferences and leave out titles any member has rated. Movies and series each have their own section.</p>
+          <p className="list-description">Picks balance everyone’s ranked preferences and leave out titles anyone has rated, watched, or favorited. Movies and series each have their own section.</p>
           {recError ? <ErrorNotice text={recError} retry={() => setDetailRevision(value => value + 1)} /> : recLoading ? <Busy text="Finding common ground…" /> : <>
             {recommendations?.sections?.movies && <section className="group-shelf"><h2>Movie recommendations for everyone</h2>
               {recommendations.sections.movies.movies.length ? <MovieGrid movies={recommendations.sections.movies.movies} ratings={ratings} onRate={onRate} onAdd={movie => void saveTogether(movie)} /> : <p className="list-description">No unseen movie candidates are available for this group.</p>}
@@ -160,7 +162,7 @@ function ListsSession({ kind, user, ratings, onRate, onAdd, onToast, onNavigate,
       <div className={"list-overview-layout" + (kind === "watchlist" ? " is-private" : "")}>
         <section className="list-overview" aria-label="Your saved lists">
           <div className="list-toolbar"><h2>Your lists</h2><span>{lists.length}</span></div>
-          {error ? <ErrorNotice text={error} retry={() => void refreshLists()} /> : loading ? <Busy text="Opening your lists…" /> : lists.length ? <div className="list-grid">
+          {error ? <ErrorNotice text={error} retry={() => void refreshLists()} /> : loading ? <Busy text="Opening your lists…" /> : lists.length ? view === 'compact' ? <div className="collection-table-scroll" role="region" aria-label="Your saved lists" tabIndex={0}><table className="collection-table list-overview-table"><caption className="sr-only">{kind === 'together' ? 'Together recommendation lists' : 'Private watchlists'}</caption><thead><tr><th scope="col">List</th><th scope="col">Titles</th><th scope="col">Type</th><th scope="col">Members</th><th scope="col">Open</th></tr></thead><tbody>{lists.map(list => <tr key={list.id}><th scope="row"><button type="button" id={'list-card-' + list.id} className="list-overview-name" onClick={() => choose(list.id)}>{list.name}</button></th><td>{list.itemCount}</td><td>{list.mediaType === 'both' ? 'Movies & series' : list.mediaType === 'series' ? 'Whole TV series' : 'Movies'}</td><td>{kind === 'together' ? list.members.length : 'Only you'}</td><td><button type="button" className="text-button" aria-label={'Open ' + list.name} onClick={() => choose(list.id)}>Open list <ArrowRight size={16} /></button></td></tr>)}</tbody></table></div> : <div className="list-grid">
             {lists.map(list => <button key={list.id} id={"list-card-" + list.id} className="list-card list-open-card" aria-label={"Open " + list.name} onClick={() => choose(list.id)}>
               <span className="list-card-icon">{kind === "together" ? <Users size={22} /> : <Bookmark size={22} />}</span>
               <strong>{list.name}</strong>
