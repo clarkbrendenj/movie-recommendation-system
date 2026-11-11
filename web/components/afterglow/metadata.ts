@@ -28,7 +28,7 @@ async function flushTmdb() {
   const group = [...tmdbQueue.entries()].slice(0, 6);
   for (const [id] of group) tmdbQueue.delete(id);
   try {
-    const response = await fetch(`/api/title-details?ids=${group.map(([id]) => id).join(',')}`, { credentials: 'omit', signal: AbortSignal.timeout(16000) });
+    const response = await fetch(`/api/title-details?ids=${group.map(([id]) => id).join(',')}`, { credentials: 'same-origin', signal: AbortSignal.timeout(16000) });
     if (!response.ok) throw new Error('Artwork is unavailable.');
     const value = await response.json() as { configured: boolean; unavailable?: boolean; items: Record<string, TitleDetails> };
     if (typeof value.configured !== 'boolean' || !value.items) throw new Error('Invalid artwork response.');
@@ -107,7 +107,7 @@ function enrichSeries(movie: Movie): Promise<TitleDetails | null> {
 }
 
 function loadCatalog() {
-  if (!pending) pending = fetch('/catalog/title-details.json', { credentials: 'omit' })
+  if (!pending) pending = fetch('/catalog/title-details.json', { credentials: 'same-origin' })
     .then(async response => {
       if (!response.ok) throw new Error('Title details are unavailable.');
       const value = await response.json() as Catalog;
