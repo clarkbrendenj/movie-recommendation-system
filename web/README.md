@@ -29,6 +29,22 @@ Ratings live in Cloudflare D1 and survive browser/device changes. Personal API
 responses are private and never shared through caches. No LLM or OpenAI API key
 is used for accounts, rating, or recommendation requests.
 
+New scores start at **5.0/10**; editing a saved rating starts at its existing
+value. The independent heart records a **Like** at any score, including a low
+score, without changing that score or the frozen recommendation model inputs.
+Like, Watched, and Add to list controls appear on title cards and rating screens.
+The dark cinema theme uses charcoal and wine surfaces, carpet burgundy, gold,
+neon rose Likes, and cyan Watched controls.
+
+Saving a rating marks a title watched. A title can also be marked watched without
+giving it a score; watched titles are excluded from personal and Together picks.
+**Remove rating** clears only the score and preserves Like and Watched. Marking
+a rated title unwatched asks for confirmation and atomically clears both the
+score and watched flag, preserving its Like. The rating queue's Haven't seen it
+action supports the same correction. Migration `0002_title_states.sql` adds the
+separate per-account flags and backfills watched flags for existing app-owned
+ratings without changing any saved scores or inventing viewing dates.
+
 The current private Sites deployment retains the host's outer access gate at
 the owner's request. That gate is separate from Afterglow accounts. Independent
 hosting below removes the platform gate; app accounts continue to protect data.

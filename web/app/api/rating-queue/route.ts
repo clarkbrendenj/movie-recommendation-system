@@ -4,6 +4,7 @@ import { ratingQueueStatuses } from "../../../db/schema";
 import { getAppUser } from "../../../lib/auth";
 import { selectRatingQueue } from "../../../lib/collaboration-policy.mjs";
 import { currentCatalog } from "../../../lib/server-lists";
+import { updateTitleState } from "../../../lib/server-title-state";
 import { api, ApiError, getUserRatings, json, jsonBody, positiveInteger, requireUser, sameOrigin } from "../_shared";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,10 @@ export async function POST(request: Request) {
       await db.delete(ratingQueueStatuses).where(and(eq(ratingQueueStatuses.userId, user.userId), eq(ratingQueueStatuses.movieId, movieId)));
     } else {
       if (!(await currentCatalog()).byId.has(movieId)) throw new ApiError(400, "That title is not eligible for the rating queue.");
+      if (body.status === 'unseen') {
+        await updateTitleState(user.userId, movieId, { watched: false });
+        return json({ ok: true, ratingRemoved: true });
+      }
       const updatedAt = new Date();
       await db.insert(ratingQueueStatuses).values({ userId: user.userId, movieId, status: body.status, updatedAt })
         .onConflictDoUpdate({ target: [ratingQueueStatuses.userId, ratingQueueStatuses.movieId], set: { status: body.status, updatedAt } });

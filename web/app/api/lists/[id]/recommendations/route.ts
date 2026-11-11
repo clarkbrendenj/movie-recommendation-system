@@ -1,6 +1,6 @@
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../../../db";
-import { ratings } from "../../../../../db/schema";
+import { ratings, titleStates } from "../../../../../db/schema";
 import { aggregateGroupRankings } from "../../../../../lib/collaboration-policy.mjs";
 import { rankMovies } from "../../../../../lib/recommender.mjs";
 import { rankSeries } from "../../../../../lib/tv-recommender.mjs";
@@ -23,9 +23,14 @@ export async function GET(request: Request, context: Context) {
     const limit = params.has("limit") ? positiveInteger(Number(params.get("limit")), "limit", 48) : 12;
     // Only this server-side computation reads consenting members' histories.
     // No participant's rating, utility, count, or personal reason is returned.
-    const feedback = await getDb().select({ userId: ratings.userId, movieId: ratings.movieId, rating: ratings.rating })
-      .from(ratings).where(inArray(ratings.userId, memberIds));
-    const blockedIds = new Set(feedback.map((entry) => entry.movieId));
+    const db = getDb();
+    const [feedback, watched] = await Promise.all([
+      db.select({ userId: ratings.userId, movieId: ratings.movieId, rating: ratings.rating })
+        .from(ratings).where(inArray(ratings.userId, memberIds)),
+      db.select({ movieId: titleStates.movieId }).from(titleStates)
+        .where(and(inArray(titleStates.userId, memberIds), eq(titleStates.watched, true))),
+    ]);
+    const blockedIds = new Set([...feedback, ...watched].map((entry) => entry.movieId));
     const profiles = memberIds.map((id) => feedback.filter((entry) => entry.userId === id));
     const sections: Record<string, { movies: ReturnType<typeof aggregateGroupRankings>; mode: string }> = {};
     if (row.mediaType === "movies" || row.mediaType === "both") {
@@ -42,7 +47,7 @@ export async function GET(request: Request, context: Context) {
     }
     return json({ listId: row.id, type: row.mediaType, movies: sections.movies?.movies || sections.series?.movies || [], series: sections.series?.movies || [], sections,
       policy: { method: "50% weakest rank percentile + 50% mean rank percentile across the complete shared candidate pool.",
-        excluded: "Every title rated by any member, including strong dislikes, is excluded. Unknown and haven't-seen titles are not dislikes.",
+        excluded: "Every title rated or marked watched by any member is excluded. Unknown and haven't-seen titles are not dislikes.",
         validation: "This group policy is a new preference-balancing layer, not a benchmarked rating predictor.", members: memberIds.length } });
   }, request);
 }

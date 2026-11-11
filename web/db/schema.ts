@@ -82,3 +82,15 @@ export const ratingQueueStatuses = sqliteTable("rating_queue_statuses", {
 }, table => [primaryKey({ columns: [table.userId, table.movieId] }),
   check("rating_queue_valid_title", sql`${table.movieId} > 0`),
   check("rating_queue_valid_status", sql`${table.status} IN ('skip','unseen')`)]);
+
+// Expressive likes are independent of numeric scores and model thresholds.
+export const titleStates = sqliteTable("title_states", {
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  movieId: integer("movie_id").notNull(),
+  liked: integer("liked", { mode: "boolean" }).notNull().default(false),
+  watched: integer("watched", { mode: "boolean" }).notNull().default(false),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+}, table => [primaryKey({ columns: [table.userId, table.movieId] }),
+  check("title_states_valid_title", sql`${table.movieId} > 0`),
+  check("title_states_valid_liked", sql`${table.liked} IN (0,1)`),
+  check("title_states_valid_watched", sql`${table.watched} IN (0,1)`)]);

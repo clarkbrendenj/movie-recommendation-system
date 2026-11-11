@@ -15,6 +15,13 @@
       "when": 1794272084102,
       "tag": "0001_massive_luminals",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794364800000,
+      "tag": "0002_title_states",
+      "breakpoints": true
     }
   ]
 }

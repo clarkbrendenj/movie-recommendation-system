@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, EyeOff, Search, SkipForward, Star, X } from "lucide-react";
 import { api, message, titleOf, type MediaType, type Movie, type MoviePage, type Recommendations, type Tab, type User } from "./types";
 import { prefetchTitleDetails } from "./metadata";
+import { useTitleActivity } from "./activity";
 import { AuthGate, Busy, Empty, ErrorNotice, Modal, MovieGrid, Poster, RatingEditor, Segments, SkeletonGrid, useDebounced } from "./ui";
 
 export function DiscoverScreen({ kind, user, ratings, onRate, onAdd, onNavigate, revision }: { kind: 'movies' | 'series'; user: User | null; ratings: Map<number, number>; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void; onNavigate: (tab: Tab) => void; revision: number }) {
@@ -12,15 +13,18 @@ export function DiscoverScreen({ kind, user, ratings, onRate, onAdd, onNavigate,
   return <><div className="page-intro"><div><span className="eyebrow">{kind === 'movies' ? 'THE FEATURE PRESENTATION' : 'ONE MORE EPISODE, PLEASE'}</span><h1>{kind === 'movies' ? 'Make tonight a movie night.' : 'Your next great series.'}</h1><p>{data?.mode === 'personalized' ? 'A selection shaped by the stories you rated highly.' : kind === 'series' ? 'A starting selection of whole series. Rate a few favorites to make it yours.' : 'A starting selection of memorable movies. Your ratings make it personal.'}</p></div><button className="button outline-button" onClick={() => onNavigate(kind === 'movies' ? 'rate-movies' : 'rate-series')}><Star size={16} />Rate {kind === 'movies' ? 'movies' : 'series'}</button></div><div className="marquee-line"><span>NOW SHOWING</span><i /><span>{kind === 'movies' ? 'MOVIES FOR YOU' : 'SERIES FOR YOU'}</span><i /><span>{user ? `A SELECTION FOR ${user.displayName.toUpperCase()}` : 'YOUR NEXT FAVORITE IS WAITING'}</span></div>{error ? <ErrorNotice text={error} retry={() => setRetry(value => value + 1)} /> : loading ? <SkeletonGrid /> : data?.movies.length ? <MovieGrid movies={data.movies} ratings={ratings} onRate={onRate} onAdd={onAdd} /> : <Empty title="A fresh selection starts with you." action={<button className="button burgundy-button" onClick={() => onNavigate(kind === 'movies' ? 'rate-movies' : 'rate-series')}>Find something to rate <ArrowRight size={16} /></button>}>Add a few more ratings and discover another corner of the catalog.</Empty>}</>;
 }
 
-export function RatingScreen({ kind, user, ratings, onAuth, onSaved, onAdd, onToast }: { kind: 'movies' | 'series'; user: User | null; ratings: Map<number, number>; onAuth: () => void; onSaved: (change?: { movieId: number; rating: number | null }) => Promise<void>; onAdd: (movie: Movie) => void; onToast: (text: string) => void }) {
-  const [queue, setQueue] = useState<Movie[]>([]), [current, setCurrent] = useState<Movie | null>(null), [value, setValue] = useState(7), [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(''), [query, setQuery] = useState(''), [results, setResults] = useState<Movie[]>([]), [searchLoading, setSearchLoading] = useState(false), [searchError, setSearchError] = useState('');
+export function RatingScreen({ kind, user, ratings, onAuth, onAdd, onToast }: { kind: 'movies' | 'series'; user: User | null; ratings: Map<number, number>; onAuth: () => void; onAdd: (movie: Movie) => void; onToast: (text: string) => void }) {
+  const [queue, setQueue] = useState<Movie[]>([]), [current, setCurrent] = useState<Movie | null>(null), [value, setValue] = useState(5), [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(''), [query, setQuery] = useState(''), [results, setResults] = useState<Movie[]>([]), [searchLoading, setSearchLoading] = useState(false), [searchError, setSearchError] = useState('');
+  const activity = useTitleActivity();
+  const [confirmUnseen, setConfirmUnseen] = useState(false);
+  const isBusy = busy || Boolean(current && activity.pending.has(current.movieId));
   const consumed = useRef(new Set<number>()), generation = useRef(0), alive = useRef(true), mutating = useRef(false), queueRef = useRef(queue);
   queueRef.current = queue;
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const settled = useDebounced(query);
   const loadQueue = useCallback(async () => {
     const turn = ++generation.current; setLoading(true); setError('');
-    try { const exclude = [...consumed.current].slice(-200).join(','); const data = await api<{ movies: Movie[]; remaining: number }>(`/api/rating-queue?type=${kind}&limit=12&exclude=${exclude}`); if (turn !== generation.current) return; const fresh = data.movies.filter(movie => !consumed.current.has(movie.movieId)); setQueue(fresh); setCurrent(fresh[0] || null); setValue(7); }
+    try { const exclude = [...consumed.current].slice(-200).join(','); const data = await api<{ movies: Movie[]; remaining: number }>(`/api/rating-queue?type=${kind}&limit=12&exclude=${exclude}`); if (turn !== generation.current) return; const fresh = data.movies.filter(movie => !consumed.current.has(movie.movieId)); setQueue(fresh); setCurrent(fresh[0] || null); setValue(5); }
     catch (failure) { if (turn === generation.current) setError(message(failure)); }
     finally { if (turn === generation.current) setLoading(false); }
   }, [kind, user?.id]);
@@ -42,24 +46,52 @@ export function RatingScreen({ kind, user, ratings, onAuth, onSaved, onAdd, onTo
     api<MoviePage>(`/api/movies?type=${kind}&q=${encodeURIComponent(settled)}&page=1`, { signal: controller.signal }).then(data => { if (!controller.signal.aborted) setResults(data.movies); }).catch(failure => { if (!controller.signal.aborted) setSearchError(message(failure)); }).finally(() => { if (!controller.signal.aborted) setSearchLoading(false); });
     return () => controller.abort();
   }, [kind, settled]);
-  function choose(movie: Movie) { if (mutating.current) return; generation.current++; setLoading(false); if (current && current.movieId !== movie.movieId) consumed.current.add(current.movieId); setCurrent(movie); setValue(ratings.get(movie.movieId) ?? 7); setQuery(''); setError(''); }
-  function advance() { if (current) consumed.current.add(current.movieId); const remaining = queueRef.current.filter(movie => !consumed.current.has(movie.movieId)); setQueue(remaining); if (remaining.length) { setCurrent(remaining[0]); setValue(7); } else { setCurrent(null); void loadQueue(); } }
-  async function save() { if (!current || mutating.current) return; if (!user) { onAuth(); return; } mutating.current = true; setBusy(true); setError(''); try { await api('/api/ratings', { method: 'PUT', body: JSON.stringify({ movieId: current.movieId, rating: value, ratingScale: 10 }) }); if (!alive.current) return; advance(); onToast(`Saved ${value.toFixed(1)} / 10. On to the next story.`); void onSaved({ movieId: current.movieId, rating: value }).catch(failure => { if (alive.current) onToast(`Your rating was saved. ${message(failure)}`); }); } catch (failure) { if (alive.current) setError(message(failure)); } finally { mutating.current = false; if (alive.current) setBusy(false); } }
-  async function skip(status: 'skip' | 'unseen') { if (!current || mutating.current) return; mutating.current = true; setBusy(true); setError(''); try { if (user) await api('/api/rating-queue', { method: 'POST', body: JSON.stringify({ movieId: current.movieId, status }) }); else onToast('Skipped for this visit. Sign in to remember your skipped titles.'); if (alive.current) advance(); } catch (failure) { if (alive.current) setError(message(failure)); } finally { mutating.current = false; if (alive.current) setBusy(false); } }
+  function choose(movie: Movie) { if (mutating.current || isBusy) return; setConfirmUnseen(false); generation.current++; setLoading(false); if (current && current.movieId !== movie.movieId) consumed.current.add(current.movieId); setCurrent(movie); setValue(ratings.get(movie.movieId) ?? 5); setQuery(''); setError(''); }
+  function advance() { setConfirmUnseen(false); if (current) consumed.current.add(current.movieId); const remaining = queueRef.current.filter(movie => !consumed.current.has(movie.movieId)); setQueue(remaining); if (remaining.length) { setCurrent(remaining[0]); setValue(5); } else { setCurrent(null); void loadQueue(); } }
+  async function save() {
+    if (!current || mutating.current || isBusy) return;
+    if (!user) { onAuth(); return; }
+    mutating.current = true; setBusy(true); setError('');
+    try { if (!await activity.saveRating(current.movieId, value) || !alive.current) return; advance(); onToast(`Saved ${value.toFixed(1)} / 10. On to the next story.`); }
+    catch (failure) { if (alive.current) setError(message(failure)); }
+    finally { mutating.current = false; if (alive.current) setBusy(false); }
+  }
+  async function skip(status: 'skip' | 'unseen', confirmed = false) {
+    if (!current || mutating.current || isBusy) return;
+    if (status === 'unseen' && ratings.has(current.movieId) && !confirmed) { setConfirmUnseen(true); return; }
+    mutating.current = true; setBusy(true); setError('');
+    try {
+      if (user) {
+        if (status === 'unseen') { if (!await activity.updateState(current.movieId, { watched: false })) return; }
+        else await api('/api/rating-queue', { method: 'POST', body: JSON.stringify({ movieId: current.movieId, status }) });
+      } else onToast('Skipped for this visit. Sign in to remember your skipped titles.');
+      if (alive.current) advance();
+    } catch (failure) { if (alive.current) setError(message(failure)); }
+    finally { mutating.current = false; if (alive.current) setBusy(false); }
+  }
   return <><div className="page-intro"><div><span className="eyebrow">YOUR HONEST TAKE, ONE TITLE AT A TIME</span><h1>{kind === 'movies' ? 'How was the movie?' : 'How was the whole series?'}</h1><p>Move the fader, find your feeling, and save. We’ll bring you another title.</p></div><span className="mode-stamp"><Star size={18} />RATING MODE</span></div>
-    <label className="search-box queue-search"><Search size={19} /><span className="sr-only">Find a {kind === 'movies' ? 'movie' : 'series'} to rate</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} disabled={busy} placeholder={`Looking for a particular ${kind === 'movies' ? 'movie' : 'series'}? Search here…`} /><button className="icon-button" aria-label="Clear title search" onClick={() => setQuery('')} hidden={!query} disabled={busy}><X size={17} /></button></label>
-    {settled && <div className="queue-search-results">{searchLoading ? <Busy text="Finding that title…" /> : searchError ? <ErrorNotice text={searchError} /> : results.length ? <><div className="search-result-heading"><span>CHOOSE A TITLE TO RATE</span><button className="text-button" onClick={() => setQuery('')} disabled={busy}>Back to the queue</button></div><div className="search-results-list">{results.map(movie => <button key={movie.movieId} onClick={() => choose(movie)} disabled={busy}><span className="rating-search-title"><span className="rating-search-poster"><Poster movie={movie} /></span><span>{titleOf(movie)} <small>{movie.year || ''}</small></span></span><span>{ratings.has(movie.movieId) ? 'Edit your rating' : 'Rate this'} <ArrowRight size={15} /></span></button>)}</div></> : <p className="quiet-copy">No matching titles. Try another name.</p>}</div>}
+    <label className="search-box queue-search"><Search size={19} /><span className="sr-only">Find a {kind === 'movies' ? 'movie' : 'series'} to rate</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} disabled={isBusy} placeholder={`Looking for a particular ${kind === 'movies' ? 'movie' : 'series'}? Search here…`} /><button className="icon-button" aria-label="Clear title search" onClick={() => setQuery('')} hidden={!query} disabled={isBusy}><X size={17} /></button></label>
+    {settled && <div className="queue-search-results">{searchLoading ? <Busy text="Finding that title…" /> : searchError ? <ErrorNotice text={searchError} /> : results.length ? <><div className="search-result-heading"><span>CHOOSE A TITLE TO RATE</span><button className="text-button" onClick={() => setQuery('')} disabled={isBusy}>Back to the queue</button></div><div className="search-results-list">{results.map(movie => <button key={movie.movieId} onClick={() => choose(movie)} disabled={isBusy}><span className="rating-search-title"><span className="rating-search-poster"><Poster movie={movie} /></span><span>{titleOf(movie)} <small>{movie.year || ''}</small></span></span><span>{ratings.has(movie.movieId) ? 'Edit your rating' : 'Rate this'} <ArrowRight size={15} /></span></button>)}</div></> : <p className="quiet-copy">No matching titles. Try another name.</p>}</div>}
     {error && <ErrorNotice text={error} retry={current ? undefined : () => void loadQueue()} />}
-    {loading ? <Busy text="Choosing your next title…" /> : current ? <section className="rating-stage" aria-label="Rate the current title"><RatingEditor movie={current} value={value} onChange={setValue} busy={busy} user={user} onSave={() => void save()} onAdd={() => onAdd(current)} next><div className="queue-actions"><button className="button soft-button" onClick={() => void skip('skip')} disabled={busy}><SkipForward size={16} />Skip for now</button><button className="button soft-button" onClick={() => void skip('unseen')} disabled={busy}><EyeOff size={16} />Haven’t seen it</button></div></RatingEditor><div className="rating-stage-footnote"><span>YOUR OPINION GETS THE SPOTLIGHT.</span><p>Skipping is never a dislike. “Skip for now” returns later; unseen titles stay out of the rating queue until you search for them.</p></div></section> : !error && <Empty title="You’ve reached the end of this queue.">Search for a title above, or come back later for another selection.</Empty>}
+    {loading ? <Busy text="Choosing your next title…" /> : current ? <section className="rating-stage" aria-label="Rate the current title"><RatingEditor movie={current} value={value} onChange={setValue} busy={isBusy} user={user} onSave={() => void save()} onAdd={() => onAdd(current)} next><div className="queue-actions"><button className="button soft-button" onClick={() => void skip('skip')} disabled={isBusy}><SkipForward size={16} />Skip for now</button><button className="button soft-button" onClick={() => void skip('unseen')} disabled={isBusy}><EyeOff size={16} />Haven’t seen it</button></div>{confirmUnseen && <div className="title-action-confirm queue-unseen-confirm" role="group" aria-label="Confirm removing the accidental rating"><p>This removes your rating and marks this title unwatched. Your Like stays as it is.</p><button className="button outline-button title-action-remove" onClick={() => void skip('unseen', true)} disabled={isBusy}>Remove rating &amp; next</button><button className="text-button" onClick={() => setConfirmUnseen(false)} disabled={isBusy}>Keep my rating</button></div>}</RatingEditor><div className="rating-stage-footnote"><span>YOUR OPINION GETS THE SPOTLIGHT.</span><p>Skipping is never a dislike. “Skip for now” returns later; unseen titles stay out of the rating queue until you search for them.</p></div></section> : !error && <Empty title="You’ve reached the end of this queue.">Search for a title above, or come back later for another selection.</Empty>}
   </>;
 }
 
-export function RatingDialog({ movie, initial, hasRating, user, onClose, onAuth, onSaved, onAdd }: { movie: Movie; initial: number; hasRating: boolean; user: User | null; onClose: () => void; onAuth: () => void; onSaved: (change?: { movieId: number; rating: number | null }) => Promise<void>; onAdd: () => void }) {
+export function RatingDialog({ movie, initial, user, onClose, onAuth, onAdd }: { movie: Movie; initial: number; user: User | null; onClose: () => void; onAuth: () => void; onAdd: () => void }) {
+  const activity = useTitleActivity();
   const [value, setValue] = useState(initial), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const alive = useRef(true), mutating = useRef(false);
+  const isBusy = busy || activity.pending.has(movie.movieId);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  async function save(remove = false) { if (mutating.current) return; if (!user) { onAuth(); return; } mutating.current = true; setBusy(true); setError(''); try { await api(remove ? `/api/ratings?movieId=${movie.movieId}` : '/api/ratings', { method: remove ? 'DELETE' : 'PUT', ...(remove ? {} : { body: JSON.stringify({ movieId: movie.movieId, rating: value, ratingScale: 10 }) }) }); if (!alive.current) return; void onSaved({ movieId: movie.movieId, rating: remove ? null : value }).catch(() => {}); onClose(); } catch (failure) { if (alive.current) setError(message(failure)); } finally { mutating.current = false; if (alive.current) setBusy(false); } }
-  return <Modal title={`Rate ${titleOf(movie)}`} onClose={onClose} busy={busy} wide><div className="dialog-rating"><RatingEditor movie={movie} value={value} onChange={setValue} busy={busy} user={user} onSave={() => void save()} onAdd={onAdd}>{hasRating && <button className="text-button remove-score" onClick={() => void save(true)} disabled={busy}>Remove my rating</button>}</RatingEditor>{error && <ErrorNotice text={error} />}</div></Modal>;
+  async function save() {
+    if (mutating.current || isBusy) return;
+    if (!user) { onAuth(); return; }
+    mutating.current = true; setBusy(true); setError('');
+    try { if (await activity.saveRating(movie.movieId, value) && alive.current) onClose(); }
+    catch (failure) { if (alive.current) setError(message(failure)); }
+    finally { mutating.current = false; if (alive.current) setBusy(false); }
+  }
+  return <Modal title={`Rate ${titleOf(movie)}`} onClose={onClose} busy={isBusy} wide><div className="dialog-rating"><RatingEditor movie={movie} value={value} onChange={setValue} busy={isBusy} user={user} onSave={() => void save()} onAdd={onAdd} onRatingRemoved={onClose} />{error && <ErrorNotice text={error} />}</div></Modal>;
 }
 
 export function HistoryScreen({ user, ratings, revision, onAuth, onRate, onAdd }: { user: User | null; ratings: Map<number, number>; revision: number; onAuth: () => void; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void }) {

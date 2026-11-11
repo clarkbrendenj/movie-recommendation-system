@@ -5,8 +5,8 @@
   gap:25px;
   margin-top:16px;
   padding-top:20px;
-  border-top:1px solid #d4bd99;
-  color:#6e5849;
+  border-top:1px solid var(--line);
+  color:var(--muted);
 }
 .tmdb-credit-brand {
   display:flex;
@@ -19,7 +19,7 @@
   font:11px/1.6 "Courier New",monospace;
   letter-spacing:1.3px;
   text-transform:uppercase;
-  color:#79582f;
+  color:var(--gold);
 }
 .tmdb-credit-brand a {
   display:block;
