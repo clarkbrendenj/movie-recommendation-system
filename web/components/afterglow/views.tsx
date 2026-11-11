@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, EyeOff, Search, SkipForward, Star, X } from "lucide-react";
 import { api, message, titleOf, type MediaType, type Movie, type MoviePage, type Recommendations, type Tab, type User } from "./types";
 import { prefetchTitleDetails } from "./metadata";
 import { useTitleActivity } from "./activity";
 import { useCollectionView } from "./collection-view";
+import { CollectionQueryControls, useCollectionQuery } from "./collection-query";
 import { AuthGate, Busy, Empty, ErrorNotice, Modal, MovieGrid, MovieTable, Poster, RatingEditor, Segments, SkeletonGrid, useDebounced } from "./ui";
 
 export function DiscoverScreen({ kind, user, ratings, onRate, onAdd, onNavigate, revision }: { kind: 'movies' | 'series'; user: User | null; ratings: Map<number, number>; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void; onNavigate: (tab: Tab) => void; revision: number }) {
@@ -142,7 +143,9 @@ export function RatingDialog({ movie, initial, user, onClose, onAuth, onAdd }: {
 
 export function HistoryScreen({ user, ratings, revision, onAuth, onRate, onAdd }: { user: User | null; ratings: Map<number, number>; revision: number; onAuth: () => void; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void }) {
   const [items, setItems] = useState<Movie[]>([]), [kind, setKind] = useState<MediaType>('both'), [loading, setLoading] = useState(true), [error, setError] = useState('');
+  const activity = useTitleActivity();
   useEffect(() => { if (!user) { setItems([]); setLoading(false); return; } const controller = new AbortController(); const ids = [...ratings.keys()]; if (!ids.length) { setItems([]); setLoading(false); return; } setLoading(true); setError(''); const chunks = Array.from({ length: Math.ceil(ids.length / 24) }, (_, index) => ids.slice(index * 24, (index + 1) * 24)); Promise.all(chunks.map(chunk => api<MoviePage>(`/api/movies?type=both&ids=${chunk.join(',')}`, { signal: controller.signal }))).then(data => { if (!controller.signal.aborted) { const indexed = new Map(data.flatMap(page => page.movies).map(movie => [movie.movieId, movie])); setItems(ids.map(id => indexed.get(id)).filter((movie): movie is Movie => Boolean(movie))); } }).catch(failure => { if (!controller.signal.aborted) setError(message(failure)); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [user?.id, ratings, revision]);
-  const visible = items.filter(movie => kind === 'both' || (kind === 'series' ? movie.mediaType === 'series' : !movie.mediaType || movie.mediaType === 'movie'));
-  return <><div className="page-intro"><div><span className="eyebrow">YOUR PERSONAL ARCHIVE</span><h1>Every take tells a story.</h1><p>Your ratings live here. Change your mind whenever the credits settle.</p></div><Segments value={kind} onChange={setKind} /></div>{!user ? <AuthGate onSignIn={onAuth} /> : error ? <ErrorNotice text={error} /> : loading ? <SkeletonGrid /> : visible.length ? <><p className="quiet-copy">{visible.length} {visible.length === 1 ? 'title' : 'titles'} rated · Your scores are private.</p><MovieGrid movies={visible} ratings={ratings} onRate={onRate} onAdd={onAdd} /></> : <Empty title="Your first take is still to come.">Rate a movie or a whole series to start your own personal archive.</Empty>}</>;
+  const sourceItems = useMemo(() => items.filter(movie => kind === 'both' || (kind === 'series' ? movie.mediaType === 'series' : !movie.mediaType || movie.mediaType === 'movie')), [items, kind]);
+  const collectionQuery = useCollectionQuery(sourceItems, ratings, activity.states);
+  return <><div className="page-intro"><div><span className="eyebrow">YOUR PERSONAL ARCHIVE</span><h1>Every take tells a story.</h1><p>Your ratings live here. Change your mind whenever the credits settle.</p></div><Segments value={kind} onChange={setKind} /></div>{!user ? <AuthGate onSignIn={onAuth} /> : error ? <ErrorNotice text={error} /> : loading ? <SkeletonGrid /> : sourceItems.length ? <><CollectionQueryControls query={collectionQuery} label="Sort and filter my ratings" /><p className="quiet-copy">Your saved scores are private.</p><MovieGrid movies={sourceItems} query={collectionQuery} ratings={ratings} onRate={onRate} onAdd={onAdd} /></> : <Empty title="Your first take is still to come.">Rate a movie or a whole series to start your own personal archive.</Empty>}</>;
 }

@@ -60,6 +60,24 @@ through row refreshes and failed requests, and clear only after a successful
 save or correction. The full vertical-fader editor remains available on title
 selection and shares these pending scores.
 
+Compact title tables have sortable **Your rating, Genre, Year, Favorite, and
+Watched** column headings, each with its own filter button. Select a heading
+again to reverse its order. Filters support inclusive saved-score and year
+ranges, rated/unrated titles, any selected genre, and Favorite or watched status.
+Genre filters include secondary genres; sorting uses the first listed genre.
+Filters combine across columns and keep their clear controls available when no
+titles match. Invalid or reversed ranges show a validation message.
+
+**My Ratings** and saved watchlist titles also expose these controls in poster
+view. Unrated titles and missing genres/years remain last when sorting. Only
+saved personal scores count: pending slider values and public/provider ratings
+never affect sorting or filtering. An explicit watched flag takes precedence;
+a saved rating supplies watched status if no flag exists. View choices survive
+inline saves and poster/compact switches while the screen remains open. Saved
+Together titles use the same personal controls. Recommendation tables keep
+their model ordering until the user explicitly sorts or filters their display;
+these controls do not change recommendation scores or trained models.
+
 Existing hearts become Favorites without a database migration; the stored API
 field remains `liked` for compatibility. A Favorite is a binary positive signal,
 including without a score, and is counted once if the rating is already high.
