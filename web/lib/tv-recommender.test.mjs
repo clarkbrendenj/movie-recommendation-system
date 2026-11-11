@@ -57,6 +57,34 @@ test("cold starts and low ratings use series popularity and retain seen exclusio
   assert.deepEqual(below.movies.map(item => item.movieId), [OFFSET + 3, OFFSET + 2]);
 });
 
+test('a low-rated TV Favorite overrides the threshold without changing its saved score', () => {
+  const model = fixture(), ratings = [{movieId:OFFSET+1,rating:1.5}];
+  const actual = recommendSeries(model, ratings, 10, [OFFSET+1]);
+  const expected = recommendSeries(model, [{movieId:OFFSET+1,rating:4}], 10);
+  assert.equal(actual.mode, 'personalized'); assert.equal(actual.likes, 1); assert.equal(actual.ratingsCount, 1);
+  assert.deepEqual(actual.movies.map(item => [item.movieId,item.score]), expected.movies.map(item => [item.movieId,item.score]));
+  assert.ok(actual.movies.every(item => item.reason.includes('favorited') && item.movieId !== OFFSET+1));
+  assert.equal(ratings[0].rating, 1.5);
+  assert.equal(recommendSeries(model, ratings, 10, []).mode, 'starter');
+});
+
+test('TV Favorites deduplicate positives and do not fabricate watch ratings', () => {
+  const model = fixture(), ratings = [{movieId:OFFSET+1,rating:4}];
+  const actual = recommendSeries(model, ratings, 10, [OFFSET+1,OFFSET+1]);
+  const expected = recommendSeries(model, ratings, 10);
+  assert.equal(actual.likes, 1);
+  assert.deepEqual(actual.movies.map(item => [item.movieId,item.score]), expected.movies.map(item => [item.movieId,item.score]));
+  const unrated = recommendSeries(model, [], 10, new Set([OFFSET+1]));
+  assert.equal(unrated.ratingsCount, 0); assert.equal(unrated.likes, 1);
+  assert.deepEqual(unrated.movies.map(item => [item.movieId,item.score]), expected.movies.map(item => [item.movieId,item.score]));
+});
+
+test('foreign identities, vetoed seasons, context movies and malformed TV Favorites cannot personalize', () => {
+  const model = fixture();
+  const actual = recommendSeries(model, [], 10, [1,OFFSET+4,OFFSET+5,OFFSET+9999,NaN,1.5,String(OFFSET+1),null]);
+  assert.deepEqual(actual, recommendSeries(model, [], 10));
+});
+
 test("unlinked MovieLens IDs, vetoed seasons and malformed entries cannot create likes", () => {
   const result = recommendSeries(fixture(), [null, { movieId: 1, rating: 5 }, { movieId: OFFSET + 4, rating: 5 }, { movieId: OFFSET + 1, rating: 4.201 }]);
   assert.equal(result.mode, "starter");

@@ -29,18 +29,60 @@ Ratings live in Cloudflare D1 and survive browser/device changes. Personal API
 responses are private and never shared through caches. No LLM or OpenAI API key
 is used for accounts, rating, or recommendation requests.
 
+New scores start at **5.0/10**; editing a saved rating starts at its existing
+value. The heart records a **Favorite** at any score, including a low score.
+Favorites explicitly enter the corresponding movie or TV model's positive
+preference profile without changing the saved rating or trained weights.
+Favorite, Watched, and Add to list controls appear on title cards and rating screens.
+The dark cinema theme uses charcoal and wine surfaces, carpet burgundy, gold,
+neon rose Favorites, and cyan Watched controls.
+
+Saving a rating marks a title watched. A title can also be marked watched without
+giving it a score; watched titles are excluded from personal and Together picks.
+**Remove rating** clears only the score and preserves Favorite and Watched. Marking
+a rated title unwatched asks for confirmation and atomically clears both the
+score and watched flag, preserving its Favorite. The rating queue's Haven't seen it
+action supports the same correction. Migration `0002_title_states.sql` adds the
+separate per-account flags and backfills watched flags for existing app-owned
+ratings without changing any saved scores or inventing viewing dates.
+
+A global **Posters / Compact list** toggle switches title collections, rating
+queues/search, saved lists, Together picks, and rating history to dense table
+rows. The preference is saved in this browser and follows navigation. Each row
+starts with a visible small poster followed by its title. Hover or keyboard
+focus on either enlarges the cover, and tapping the thumbnail pins the preview.
+Rows include a condensed horizontal red-to-green slider, changing emoji, score,
+and explicit Save button. Scores remain 1–10 in 0.1 steps, starting at 5 for an
+unrated title; existing scores keep their saved value. Moving a slider does not
+write a rating. Queue rows remove only the successfully saved title and keep
+other queued titles and drafts. Unsaved scores remain in account-scoped memory
+through row refreshes and failed requests, and clear only after a successful
+save or correction. The full vertical-fader editor remains available on title
+selection and shares these pending scores.
+
+Existing hearts become Favorites without a database migration; the stored API
+field remains `liked` for compatibility. A Favorite is a binary positive signal,
+including without a score, and is counted once if the rating is already high.
+Removing a Favorite restores threshold-based behavior; it does not remove a
+high score's positive signal. Favorites are not automatically marked watched
+and are excluded from recommending themselves. Together inference uses each
+member's own Favorites and excludes the union of rated, watched, and favorite
+titles without returning anyone else's activity.
+
 The current private Sites deployment retains the host's outer access gate at
 the owner's request. That gate is separate from Afterglow accounts. Independent
 hosting below removes the platform gate; app accounts continue to protect data.
 Older ratings keyed to platform identities remain stored unchanged. They are
 not automatically claimed by new accounts: an import must verify ownership.
 
-All rated movies are excluded from future recommendations. Ratings of **8–10**
-contribute to the preference profile, following the evaluated model.
-With no liked movies, the app shows training-popularity starter picks, with IMDb
+All rated movies are excluded from future recommendations. Ratings of **8–10**,
+or an explicit **Favorite** at any score, contribute to the preference profile.
+With no positive preferences, the app shows training-popularity starter picks, with IMDb
 quality and movie ID used as deterministic secondary ordering. Lower ratings
 exclude movies but do not create a negative preference vector. Rating a movie
 does not retrain the global collaborative model or modify another user's taste.
+The recorded offline benchmark scores describe the original rating-only policy;
+the explicit Favorite override has not been assigned a new benchmark score.
 
 The app accepts ratings from **1.0 to 10.0 in steps of 0.1**. A vertical
 red-to-green fader and changing reaction show the selected value beside the
@@ -189,9 +231,59 @@ on title details. The JSON overlay is public and may be reused under the
 applicable source terms; its TVmaze-derived fields retain that license.
 
 Artwork falls back to the existing theater-style CSS cover when unavailable
-or when an image fails. Movie posters need a separate provider connection
-(for example, a free non-commercial TMDB API account); no paid service or key
-is enabled by this update. Cast, crew, and season details appear when known.
+or when no verified cover can load. A known TVmaze cover remains an alternate
+when a preferred TMDB image fails. Covers appear in recommendation cards,
+watchlists, Together lists, rating history, rating search, and rating mode.
+The next three rating-queue titles preload their public metadata and cover
+images. Cast, crew, and season details appear when known.
+
+The browser also consumes the optional `public/catalog/title-details-tmdb.json`
+overlay produced by the bounded exporter. Verified precomputed covers render
+without a new provider lookup; remaining titles use at most two concurrent
+six-ID batches. Transient failures receive one bounded retry, and an absent
+connection is rechecked after a shared cooldown. Both same-origin metadata
+requests carry the Cloudflare Access session; cookies and account data are
+never forwarded to external metadata services. Posters can be missing at a
+provider, so a lookup attempt is not reported as a verified cover.
+
+### Optional TMDB connection
+
+TMDB provides movie and TV posters and richer credits after the owner connects
+an API Read Access Token. The token is an encrypted Cloudflare Worker secret
+named `TMDB_API_READ_TOKEN`, never a client environment variable or a file in
+this repository. Friends continue using their ordinary Afterglow accounts.
+
+Create a free non-commercial developer account at
+[TMDB](https://www.themoviedb.org/signup), open Settings → API, and obtain the
+**API Read Access Token**, rather than the shorter API key. From the original
+project root in your own terminal, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\web\scripts\connect-tmdb.ps1
+```
+
+Paste the token only into the hidden terminal prompt. The connector verifies
+TMDB access, checks this exact Afterglow account/Worker/database destination,
+and stores the token using Wrangler's normal existing OAuth sign-in. It never
+puts the token in arguments, environment variables, logs, or local files.
+Refresh the app after the terminal reports success. Until then, TVmaze and the
+existing CSS covers continue working. No payment plan is enabled by this step.
+
+The public `/api/title-details?ids=...` route accepts up to six known catalog
+IDs per request. It reads small exact-identity shards, requests only metadata,
+and caches sanitized public fields for a week (unmatched identities for six
+hours). Movie lookups use authoritative MovieLens IMDb/TMDB links; conflicting
+IMDb identities are rejected. TV lookups require one exact title/first-air-year
+match. Whole-series aggregate credits are used. No user ratings, cookies, or
+account identities are sent to TMDB, and provider scores never enter responses
+or the rating UI. Provider failures keep the app's existing metadata fallback.
+The visible Credits section uses TMDB's approved logo and attribution notice
+when the connection is configured. Movie and series model assets and ranking
+weights remain unchanged.
+
+If a matched title has no primary poster, the provider checks that same
+verified movie or series' image collection. It cannot use images belonging to
+a different title. English artwork is preferred when available.
 
 To regenerate display data in the original project checkout with its existing
 Python environment and cached raw data:
@@ -203,6 +295,23 @@ node scripts/build-title-details.mjs --tvmaze-limit 100 --max-requests 200
 
 The second command defaults to offline operation without those options. Its
 network request budget is explicit; it never trains or modifies either model.
+
+From the project root, the offline coverage audit reports stored poster
+references separately from unseeded titles and live runtime caches:
+
+```powershell
+node scripts/audit-poster-coverage.mjs
+```
+
+The optional TMDB exporter makes bounded progress through the full catalog.
+Repeated runs skip recent completed outcomes, retry temporary failures, and
+save atomic checkpoints every ten checked titles. `--offset` selects a starting
+catalog position and `--refresh` rechecks completed titles. Its output records
+verified covers, matched titles without provider artwork, unmatched/ambiguous
+titles, and temporary failures separately. Credentials are accepted only from
+the process environment; never paste a token into a command or commit it.
+The owner must first obtain TMDB API access; no movie cover coverage is claimed
+merely because the integration or import script is installed.
 
 ## Hosting
 

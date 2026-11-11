@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { ArrowRight, Bookmark, Check, Clapperboard, LoaderCircle, Star, Trash2, X } from "lucide-react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { ArrowRight, Check, Clapperboard, LoaderCircle, Star, Trash2, X } from "lucide-react";
 import { api, message, mediaLabel, titleOf, type MediaType, type Movie, type User } from "./types";
 import { useTitleDetails } from "./metadata";
+import { RemoveRatingButton, TitleActions, useTitleActivity } from "./activity";
+import { useCollectionView } from "./collection-view";
 import "./rating-experience.css";
 
 const PALETTES = [["#5a2634", "#f4dfb7", "#b88c4e"], ["#233a3d", "#f5e8c8", "#a87945"], ["#74603c", "#fff1d0", "#391d26"], ["#30354b", "#eee2c2", "#ac7452"], ["#513c49", "#f8e8c3", "#c2a36f"], ["#3c4b3a", "#f2dfb7", "#ac654b"]];
@@ -38,18 +41,95 @@ export function Modal({ title, children, onClose, busy = false, wide = false }: 
 }
 
 export function Poster({ movie, large = false }: { movie: Movie; large?: boolean }) {
-  movie = useTitleDetails(movie);
-  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const details = useTitleDetails(movie);
+  movie = details;
+  const [failedUrls, setFailedUrls] = useState(new Set<string>());
+  const posterUrl = [movie.posterUrl, ...(details.posterFallbackUrls || [])].find((url): url is string => Boolean(url && !failedUrls.has(url)));
   const hash = [...movie.title].reduce((sum, char) => sum + char.charCodeAt(0), movie.movieId);
   const [background, ink, accent] = PALETTES[hash % PALETTES.length], title = titleOf(movie);
   const longest = Math.max(1, ...title.split(/\s+|[-–—]/).map(word => word.length));
-  return <div className={`poster poster-${hash % 4} ${large ? 'poster-large' : ''}`} style={{ '--poster-bg': background, '--poster-ink': ink, '--poster-accent': accent, '--longest-word': longest * .72 } as CSSProperties} aria-hidden="true"><div className="poster-border" /><span className="poster-studio">AFTERGLOW PICTURES</span><div className="poster-geometry"><i /><i /><i /></div><span className="poster-symbol">✦</span><span className={`poster-name ${title.length > 25 ? 'poster-name-long' : ''}`}>{title}</span><div className="poster-footer"><span>{movie.mediaType === 'series' ? 'THE SERIES COLLECTION' : 'A PICTURE HOUSE SELECTION'}</span><span>{movie.year || '—'}</span></div>{movie.posterUrl && movie.posterUrl !== failedUrl && <img className="poster-photo" src={movie.posterUrl} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailedUrl(movie.posterUrl || null)} />}</div>;
+  return <div className={`poster poster-${hash % 4} ${large ? 'poster-large' : ''}`} style={{ '--poster-bg': background, '--poster-ink': ink, '--poster-accent': accent, '--longest-word': longest * .72 } as CSSProperties} aria-hidden="true"><div className="poster-border" /><span className="poster-studio">AFTERGLOW PICTURES</span><div className="poster-geometry"><i /><i /><i /></div><span className="poster-symbol">✦</span><span className={`poster-name ${title.length > 25 ? 'poster-name-long' : ''}`}>{title}</span><div className="poster-footer"><span>{movie.mediaType === 'series' ? 'THE SERIES COLLECTION' : 'A PICTURE HOUSE SELECTION'}</span><span>{movie.year || '—'}</span></div>{posterUrl && <img key={posterUrl} className="poster-photo" src={posterUrl} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailedUrls(previous => new Set(previous).add(posterUrl))} />}</div>;
 }
 export function MovieCard({ movie, rating, onRate, onAdd, onRemove }: { movie: Movie; rating?: number; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void; onRemove?: () => void }) {
-  return <article className="movie-card"><button className="poster-button" onClick={() => onRate(movie)} aria-label={`Rate ${titleOf(movie)}`}><Poster movie={movie} /><span className="poster-action"><Star size={18} /> {rating ? 'Edit your rating' : 'Give your take'}</span></button><div className="card-meta"><span>{mediaLabel(movie)}</span><span>{movie.year || 'Year unknown'}</span></div><h3><button onClick={() => onRate(movie)}>{titleOf(movie)}</button></h3><p className="card-genres">{movie.genres.filter(genre => genre !== '(no genres listed)').slice(0, 2).join(' / ') || 'A new story awaits'}</p>{movie.reason && <p className="card-reason">{movie.reason}</p>}<div className="card-actions"><button onClick={() => onRate(movie)} className={rating ? 'is-rated' : ''}><Star size={14} fill={rating ? 'currentColor' : 'none'} />{rating ? `${rating.toFixed(1)}/10` : 'Rate'}</button>{onRemove ? <button aria-label={`Remove ${titleOf(movie)} from this watchlist`} onClick={onRemove}><Trash2 size={14} /> Remove</button> : movie.mediaType !== 'other' && <button aria-label={`Save ${titleOf(movie)} to a watchlist`} onClick={() => onAdd(movie)}><Bookmark size={14} /> Save</button>}</div></article>;
+  movie = useTitleDetails(movie);
+  return <article className="movie-card"><button className="poster-button" onClick={() => onRate(movie)} aria-label={`Rate ${titleOf(movie)}`}><Poster movie={movie} /><span className="poster-action"><Star size={18} /> {rating ? 'Edit your rating' : 'Give your take'}</span></button><div className="card-meta"><span>{mediaLabel(movie)}</span><span>{movie.year || 'Year unknown'}</span></div><h3><button onClick={() => onRate(movie)}>{titleOf(movie)}</button></h3><p className="card-genres">{movie.genres.filter(genre => genre !== '(no genres listed)').slice(0, 2).join(' / ') || 'A new story awaits'}</p>{movie.reason && <p className="card-reason">{movie.reason}</p>}<div className="card-actions"><button onClick={() => onRate(movie)} className={rating ? 'is-rated' : ''}><Star size={14} fill={rating ? 'currentColor' : 'none'} />{rating ? `${rating.toFixed(1)}/10` : 'Rate'}</button>{onRemove && <button aria-label={`Remove ${titleOf(movie)} from this watchlist`} onClick={onRemove}><Trash2 size={14} /> Remove from list</button>}</div><TitleActions movie={movie} onAdd={() => onAdd(movie)} compact /></article>;
 }
-export function MovieGrid({ movies, ratings, onRate, onAdd, onRemove }: { movies: Movie[]; ratings: Map<number, number>; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void; onRemove?: (movie: Movie) => void }) { return <div className="movie-grid">{movies.map(movie => <MovieCard key={movie.movieId} movie={movie} rating={ratings.get(movie.movieId)} onRate={onRate} onAdd={onAdd} onRemove={onRemove ? () => onRemove(movie) : undefined} />)}</div>; }
-export function SkeletonGrid() { return <div className="movie-grid" aria-busy="true" aria-label="Loading titles">{Array.from({ length: 8 }, (_, index) => <div className="skeleton-card" key={index}><div /><span /><span /></div>)}</div>; }
+type MovieCollectionProps = { movies: Movie[]; ratings: Map<number, number>; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void; onRemove?: (movie: Movie) => void };
+
+/** A permanent small poster leads the row; hover/focus enlarges either target. */
+function CoverPreviewTitle({ movie, onRate, disabled }: { movie: Movie; onRate: () => void; disabled?: boolean }) {
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null), [pinned, setPinned] = useState(false);
+  const anchor = useRef<HTMLSpanElement>(null), previewId = useId(), title = titleOf(movie);
+  function close() { setPosition(null); setPinned(false); }
+  function open(element: HTMLElement, pin = false) {
+    const rect = element.getBoundingClientRect(), width = 220, height = 350, margin = 12;
+    const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
+    const top = rect.bottom + height + margin <= window.innerHeight ? rect.bottom + 8 : Math.max(margin, rect.top - height - 8);
+    setPosition({ left, top }); setPinned(pin);
+  }
+  useEffect(() => {
+    if (!position) return;
+    function outside(event: PointerEvent) { if (!anchor.current?.contains(event.target as Node)) close(); }
+    function escape(event: KeyboardEvent) { if (event.key === 'Escape') close(); }
+    window.addEventListener('scroll', close, true); window.addEventListener('resize', close);
+    document.addEventListener('pointerdown', outside); document.addEventListener('keydown', escape);
+    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
+  }, [Boolean(position)]);
+  return <span className="collection-title-cell" ref={anchor} onMouseLeave={() => { if (!pinned) close(); }} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) close(); }}>
+    <button type="button" className="collection-thumbnail-trigger" aria-label={`${pinned ? 'Hide' : 'Preview'} cover: ${title}`} aria-pressed={pinned} aria-describedby={position ? previewId : undefined}
+      onMouseEnter={event => { if (!pinned) open(event.currentTarget); }} onFocus={event => { if (!pinned) open(event.currentTarget); }}
+      onClick={event => { if (pinned) close(); else open(event.currentTarget, true); }}><Poster movie={movie} /></button>
+    <button type="button" className="collection-title-trigger" onClick={() => { close(); onRate(); }} disabled={disabled} aria-describedby={position ? previewId : undefined}
+      onMouseEnter={event => { if (!pinned) open(event.currentTarget); }} onFocus={event => { if (!pinned) open(event.currentTarget); }}>{title}</button>
+    {position && createPortal(<div className="collection-cover-preview" role="tooltip" id={previewId} style={{ left: position.left, top: position.top }}><Poster movie={movie} /><span className="collection-cover-caption">{title}{movie.year ? ` (${movie.year})` : ''}</span></div>, document.body)}
+  </span>;
+}
+
+/** Inline editing reuses the same account-scoped persistence and mutation lock. */
+function CompactRating({ movie, rating, disabled = false, onSaved }: { movie: Movie; rating?: number; disabled?: boolean; onSaved?: (movie: Movie, rating: number) => void }) {
+  const activity = useTitleActivity(), title = titleOf(movie);
+  const [error, setError] = useState('');
+  const alive = useRef(true), saving = useRef(false);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const value = activity.draftRatings.get(movie.movieId) ?? rating ?? 5;
+  const response = feeling(value), pending = activity.pending.has(movie.movieId), busy = disabled || pending;
+  const changed = rating === undefined || Math.abs(value - rating) > .000001;
+  const canSave = changed || Boolean(onSaved);
+  async function save() {
+    if (disabled || pending || saving.current) return;
+    saving.current = true; setError('');
+    try {
+      // A successful save may refresh and unmount this row. The callback still
+      // advances its queue after persistence; account guards live in the provider.
+      if (await activity.saveRating(movie.movieId, value)) onSaved?.(movie, value);
+    } catch (failure) { if (alive.current) setError(message(failure)); }
+    finally { saving.current = false; }
+  }
+  return <div className="collection-inline-rating" role="group" aria-label={`Rate ${title} in this row`}>
+    <div className="collection-inline-summary"><span className="collection-inline-emoji" aria-hidden="true">{response.emoji}</span><span className="collection-inline-value"><strong>{value.toFixed(1)}<small> / 10</small></strong><span className="collection-inline-feedback">{rating === undefined ? 'Not rated yet' : changed ? 'Unsaved change' : 'Saved rating'}</span></span></div>
+    <input type="range" className="collection-inline-range" min="1" max="10" step="0.1" value={value} disabled={busy} aria-label={`Your rating for ${title}`} aria-valuetext={`${value.toFixed(1)} out of 10, ${response.label}`} onChange={event => { setError(''); activity.setDraftRating(movie.movieId, Number(event.target.value)); }} />
+    <button type="button" className="collection-inline-save" onClick={() => void save()} disabled={busy || (Boolean(activity.user) && !canSave)} aria-label={`${activity.user ? 'Save' : 'Sign in to save'} ${value.toFixed(1)} out of 10 rating for ${title}${onSaved ? ' and show the next title' : ''}`}>
+      {pending ? <LoaderCircle size={14} className="spinning" /> : <Check size={14} />}<span>{pending ? 'Saving…' : activity.user ? onSaved ? 'Save & next' : changed ? 'Save' : 'Saved' : 'Sign in to save'}</span>
+    </button>
+    {error && <p className="collection-inline-error" role="alert">{error}</p>}
+  </div>;
+}
+
+export function MovieTable({ movies, ratings, onRate, onAdd, onRemove, currentMovieId, disabled = false, caption = 'Movies and whole TV series', onInlineSaved }: MovieCollectionProps & { currentMovieId?: number; disabled?: boolean; caption?: string; onInlineSaved?: (movie: Movie, rating: number) => void }) {
+  return <div className="collection-table-scroll" role="region" aria-label={caption} tabIndex={0}><table className="collection-table"><caption className="sr-only">{caption}. Hover or focus a poster or title for a larger cover. Adjust the slider and save your rating in its row.</caption><thead><tr><th scope="col">Poster and title</th><th scope="col">Year</th><th scope="col">Type</th><th scope="col">Genres</th><th scope="col">Your rating</th><th scope="col">Actions</th></tr></thead><tbody>{movies.map(movie => {
+    const rating = ratings.get(movie.movieId);
+    return <tr key={movie.movieId} className={currentMovieId === movie.movieId ? 'collection-row-current' : undefined}><th scope="row"><CoverPreviewTitle movie={movie} onRate={() => onRate(movie)} disabled={disabled} /></th><td>{movie.year || '—'}</td><td>{mediaLabel(movie)}</td><td>{movie.genres.filter(genre => genre !== '(no genres listed)').slice(0, 2).join(' / ') || '—'}</td><td><CompactRating movie={movie} rating={rating} disabled={disabled} onSaved={onInlineSaved} /></td><td><div className="collection-row-actions"><TitleActions movie={movie} onAdd={() => onAdd(movie)} compact disabled={disabled} />{onRemove && <button type="button" className="collection-remove" disabled={disabled} aria-label={`Remove ${titleOf(movie)} from this list`} onClick={() => onRemove(movie)}><Trash2 size={15} /><span>Remove</span></button>}</div></td></tr>;
+  })}</tbody></table></div>;
+}
+
+export function MovieGrid(props: MovieCollectionProps) {
+  const { view } = useCollectionView();
+  return view === 'compact' ? <MovieTable {...props} /> : <div className="movie-grid">{props.movies.map(movie => <MovieCard key={movie.movieId} movie={movie} rating={props.ratings.get(movie.movieId)} onRate={props.onRate} onAdd={props.onAdd} onRemove={props.onRemove ? () => props.onRemove?.(movie) : undefined} />)}</div>;
+}
+export function SkeletonGrid() {
+  const { view } = useCollectionView();
+  return view === 'compact' ? <div className="collection-table-scroll collection-table-loading" aria-busy="true" aria-label="Loading titles"><table className="collection-table"><thead><tr>{['Poster and title', 'Year', 'Type', 'Genres', 'Your rating', 'Actions'].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>{Array.from({ length: 6 }, (_, index) => <tr key={index}><td colSpan={6}><span className="collection-loading-line">Loading titles…</span></td></tr>)}</tbody></table></div> : <div className="movie-grid" aria-busy="true" aria-label="Loading titles">{Array.from({ length: 8 }, (_, index) => <div className="skeleton-card" key={index}><div /><span /><span /></div>)}</div>;
+}
 
 function feeling(value: number) {
   if (value < 2.5) return { emoji: '😖', label: 'Not for me' };
@@ -65,11 +145,14 @@ export function Fader({ value, onChange, title, disabled }: { value: number; onC
   const response = feeling(value);
   return <div className="rating-fader"><span className="fader-end">10 <span>Excellent</span></span><div className="fader-rail"><div className="fader-colors" /><input className="fader-input" type="range" min="1" max="10" step="0.1" value={value} onChange={event => onChange(Number(event.target.value))} disabled={disabled} aria-label={`Your rating for ${title}`} aria-valuetext={`${value.toFixed(1)} out of 10, ${response.label}`} /></div><span className="fader-end">1 <span>Not for me</span></span></div>;
 }
-export function RatingEditor({ movie, value, onChange, busy, user, onSave, onAdd, children, next = false }: { movie: Movie; value: number; onChange: (value: number) => void; busy: boolean; user: User | null; onSave: () => void; onAdd: () => void; children?: ReactNode; next?: boolean }) {
+export function RatingEditor({ movie, value, onChange, busy, user, onSave, onAdd, children, next = false, onRatingRemoved }: { movie: Movie; value: number; onChange: (value: number) => void; busy: boolean; user: User | null; onSave: () => void; onAdd: () => void; children?: ReactNode; next?: boolean; onRatingRemoved?: () => void }) {
   movie = useTitleDetails(movie);
+  const activity = useTitleActivity(), savedRating = activity.ratings.get(movie.movieId), previousRating = useRef(savedRating);
+  useEffect(() => { if (previousRating.current !== undefined && savedRating === undefined) onChange(5); previousRating.current = savedRating; }, [savedRating, movie.movieId, onChange]);
+  busy = busy || activity.pending.has(movie.movieId);
   const response = feeling(value);
   const years = movie.year ? `${movie.year}${movie.endYear && movie.endYear !== movie.year ? `–${movie.endYear}` : ''}` : 'YOUR TAKE';
-  return <div className={`rating-composition ${next ? 'rating-queue-composition' : ''}`}><div className="rating-art"><Poster movie={movie} large /></div><Fader title={titleOf(movie)} value={value} onChange={onChange} disabled={busy} /><div className="rating-story"><span className="eyebrow">{mediaLabel(movie)} · {years}{movie.mediaType === 'series' && movie.seasonCount ? ` · ${movie.seasonCount} ${movie.seasonCount === 1 ? 'season' : 'seasons'}` : ''}</span><h2>{titleOf(movie)}</h2><p className="rating-genres">{movie.genres.filter(genre => genre !== '(no genres listed)').slice(0, 3).join(' · ')}</p>{(movie.cast?.length || movie.directors?.length || movie.creators?.length) ? <dl className="rating-title-details">{Boolean(movie.directors?.length) && <div><dt>{movie.directors?.length === 1 ? 'Director' : 'Directors'}</dt><dd>{movie.directors?.slice(0, 3).join(', ')}</dd></div>}{Boolean(movie.creators?.length) && <div><dt>{movie.creators?.length === 1 ? 'Creator' : 'Creators'}</dt><dd>{movie.creators?.slice(0, 3).join(', ')}</dd></div>}{Boolean(movie.cast?.length) && <div><dt>Starring</dt><dd>{movie.cast?.slice(0, 5).join(', ')}</dd></div>}</dl> : null}{movie.mediaType === 'series' && <p className="whole-series-note">Your take on the whole series. Seasons and episodes stay out of this score.</p>}<div className="rating-expression" aria-live="polite"><span className="rating-emoji" aria-hidden="true">{response.emoji}</span><div><strong>{value.toFixed(1)}<small>/ 10</small></strong><span>{response.label}</span></div></div><p className="fader-instruction">Slide to find your score. Use the arrow keys for 0.1 steps.</p>{!next && <button className="button burgundy-button save-score" onClick={onSave} disabled={busy}>{busy ? <LoaderCircle size={17} className="spinning" /> : <Check size={17} />}{user ? `Save ${value.toFixed(1)} / 10` : 'Sign in to save your rating'}</button>}{children}{movie.mediaType !== 'other' && <button className="text-button save-later" onClick={onAdd} disabled={busy}><Bookmark size={15} />Save to a watchlist</button>}{movie.metadataSource && <p className="title-metadata-credit">Title details: <a href={movie.metadataSource.url} target="_blank" rel="noreferrer">{movie.metadataSource.name}</a>{movie.creditsSource && movie.creditsSource.url !== movie.metadataSource.url && <> · Credits: <a href={movie.creditsSource.url} target="_blank" rel="noreferrer">{movie.creditsSource.name}</a></>}</p>}</div>{next && <button className="save-next-control" onClick={onSave} disabled={busy} aria-label={user ? `Save your ${value.toFixed(1)} out of 10 rating and show the next title` : 'Sign in to save your rating'}>{busy ? <LoaderCircle size={35} className="spinning" /> : <ArrowRight size={39} strokeWidth={1.7} />}<strong>{busy ? 'Saving…' : user ? 'Save & Next' : 'Sign in'}</strong><span>{value.toFixed(1)} / 10</span></button>}</div>;
+  return <div className={`rating-composition ${next ? 'rating-queue-composition' : ''}`}><div className="rating-art"><Poster movie={movie} large /></div><Fader title={titleOf(movie)} value={value} onChange={onChange} disabled={busy} /><div className="rating-story"><span className="eyebrow">{mediaLabel(movie)} · {years}{movie.mediaType === 'series' && movie.seasonCount ? ` · ${movie.seasonCount} ${movie.seasonCount === 1 ? 'season' : 'seasons'}` : ''}</span><h2>{titleOf(movie)}</h2><p className="rating-genres">{movie.genres.filter(genre => genre !== '(no genres listed)').slice(0, 3).join(' · ')}</p>{(movie.cast?.length || movie.directors?.length || movie.creators?.length) ? <dl className="rating-title-details">{Boolean(movie.directors?.length) && <div><dt>{movie.directors?.length === 1 ? 'Director' : 'Directors'}</dt><dd>{movie.directors?.slice(0, 3).join(', ')}</dd></div>}{Boolean(movie.creators?.length) && <div><dt>{movie.creators?.length === 1 ? 'Creator' : 'Creators'}</dt><dd>{movie.creators?.slice(0, 3).join(', ')}</dd></div>}{Boolean(movie.cast?.length) && <div><dt>Starring</dt><dd>{movie.cast?.slice(0, 5).join(', ')}</dd></div>}</dl> : null}{movie.mediaType === 'series' && <p className="whole-series-note">Your take on the whole series. Seasons and episodes stay out of this score.</p>}<TitleActions movie={movie} onAdd={onAdd} disabled={busy} /><div className="rating-expression" aria-live="polite"><span className="rating-emoji" aria-hidden="true">{response.emoji}</span><div><strong>{value.toFixed(1)}<small>/ 10</small></strong><span>{response.label}</span></div></div><p className="fader-instruction">Slide to find your score. Use the arrow keys for 0.1 steps.</p>{!next && <button className="button burgundy-button save-score" onClick={onSave} disabled={busy}>{busy ? <LoaderCircle size={17} className="spinning" /> : <Check size={17} />}{user ? `Save ${value.toFixed(1)} / 10` : 'Sign in to save your rating'}</button>}{children}<RemoveRatingButton movieId={movie.movieId} disabled={busy} onRemoved={onRatingRemoved} />{movie.metadataSource && <p className="title-metadata-credit">Title details: <a href={movie.metadataSource.url} target="_blank" rel="noreferrer">{movie.metadataSource.name}</a>{movie.creditsSource && movie.creditsSource.url !== movie.metadataSource.url && <> · Credits: <a href={movie.creditsSource.url} target="_blank" rel="noreferrer">{movie.creditsSource.name}</a></>}</p>}</div>{next && <button className="save-next-control" onClick={onSave} disabled={busy} aria-label={user ? `Save your ${value.toFixed(1)} out of 10 rating and show the next title` : 'Sign in to save your rating'}>{busy ? <LoaderCircle size={35} className="spinning" /> : <ArrowRight size={39} strokeWidth={1.7} />}<strong>{busy ? 'Saving…' : user ? 'Save & Next' : 'Sign in'}</strong><span>{value.toFixed(1)} / 10</span></button>}</div>;
 }
 
 export function AuthDialog({ onClose, onComplete }: { onClose: () => void; onComplete: () => Promise<void> }) {
