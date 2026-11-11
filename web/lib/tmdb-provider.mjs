@@ -11,26 +11,40 @@ export function parseArtworkIds(raw) {
 /**
  * Credentials and raw upstream responses stay inside this provider. The
  * supplied identity resolver reads the frozen public catalog, never ratings.
+ * @typedef {{kind:'http',status:number}|{kind:'timeout'|'fetch'|'parse'|'budget'}} TmdbFailure
+ */
+/**
  * @param {number[]} ids
- * @param {{token?:string,getIdentity:(id:number)=>Promise<any>,fetch?:typeof fetch,cache?:{get:(id:number)=>Promise<any|null>,set:(id:number,details:any,ttl:number)=>Promise<void>}} options
+ * @param {{token?:string,getIdentity:(id:number)=>Promise<any>,fetch?:typeof fetch,onFailure?:(failure:TmdbFailure)=>void,cache?:{get:(id:number)=>Promise<any|null>,set:(id:number,details:any,ttl:number)=>Promise<void>}} options
  */
 export async function getTmdbTitleDetails(ids, options) {
   if (ids.length > 6 || ids.some(id => !Number.isSafeInteger(id) || id < 1)) throw new RangeError('Invalid artwork batch.');
   if (!options.token) return { configured: false, items: {} };
   const token = options.token, transport = options.fetch || fetch, deadline = Date.now() + 12000;
   let unavailable = false, requests = 0;
+  /** Only fixed categories and HTTP status may leave the credential boundary.
+   * @param {TmdbFailure} failure
+   */
+  function reportFailure(failure) {
+    unavailable = true;
+    try { options.onFailure?.(failure); } catch { /* Diagnostics are optional. */ }
+  }
   /** @param {string} path @param {Record<string,string>} [params] */
   async function request(path, params = {}) {
-    if (++requests > 20 || Date.now() >= deadline) { unavailable = true; return null; }
+    if (++requests > 20 || Date.now() >= deadline) { reportFailure({ kind: 'budget' }); return null; }
     const url = new URL(`https://api.themoviedb.org/3${path}`);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), Math.min(4500, Math.max(1, deadline - Date.now())));
+    let parsing = false;
     try {
-      const response = await transport(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal: controller.signal });
+      // Workers support manual/follow only. Reject every redirect as a non-OK
+      // response below, so the bearer token never follows a different target.
+      const response = await transport(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, credentials: 'omit', redirect: 'manual', referrerPolicy: 'no-referrer', signal: controller.signal });
       if (response.status === 404) { await response.body?.cancel(); return null; }
-      if (!response.ok) { unavailable = true; await response.body?.cancel(); return null; }
+      if (!response.ok) { reportFailure({ kind: 'http', status: response.status }); await response.body?.cancel(); return null; }
+      parsing = true;
       return await response.json();
-    } catch { unavailable = true; return null; }
+    } catch { reportFailure({ kind: controller.signal.aborted ? 'timeout' : parsing ? 'parse' : 'fetch' }); return null; }
     finally { clearTimeout(timer); }
   }
   async function display(details, mediaType) {

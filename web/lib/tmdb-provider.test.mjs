@@ -16,7 +16,7 @@ test('an unconfigured provider makes no identity or external requests', async ()
 test('known movies use authoritative IDs and return only sanitized public fields', async () => {
   const writes = [];
   const result = await getTmdbTitleDetails([1], { token: 'test-only-token', getIdentity: async () => movieIdentity,
-    fetch: async (url, init) => { assert.equal(url.origin, 'https://api.themoviedb.org'); assert.equal(url.pathname, '/3/movie/862'); assert.equal(url.searchParams.get('append_to_response'), 'credits'); assert.equal(url.searchParams.has('api_key'), false); assert.equal(init.headers.Authorization, 'Bearer test-only-token'); assert.equal(init.redirect, 'error'); return json(film); },
+    fetch: async (url, init) => { assert.equal(url.origin, 'https://api.themoviedb.org'); assert.equal(url.pathname, '/3/movie/862'); assert.equal(url.searchParams.get('append_to_response'), 'credits'); assert.equal(url.searchParams.has('api_key'), false); assert.equal(init.headers.Authorization, 'Bearer test-only-token'); assert.equal(init.redirect, 'manual'); return json(film); },
     cache: { get: async () => null, set: async (...values) => { writes.push(values); } } });
   assert.equal(result.configured, true); assert.equal(result.items[1].posterUrl, 'https://image.tmdb.org/t/p/w342/poster123.jpg');
   assert.deepEqual(result.items[1].cast, ['Tom Hanks']); assert.equal(writes[0][2], 604800);
@@ -50,6 +50,40 @@ test('upstream credential errors reveal no response body and are not cached as p
   let writes = 0;
   const result = await getTmdbTitleDetails([1], { token: 'test-only-token', getIdentity: async () => movieIdentity, fetch: async () => new Response('provider error including test-only-token', { status: 401 }), cache: { get: async () => null, set: async () => { writes++; } } });
   assert.equal(result.unavailable, true); assert.deepEqual(result.items, {}); assert.equal(writes, 0); assert.ok(!JSON.stringify(result).includes('test-only-token'));
+});
+
+test('optional failure diagnostics expose only fixed categories and HTTP status', async () => {
+  const secret = 'diagnostic-secret-must-stay-private';
+  const cases = [
+    { fetch: async () => new Response(`upstream body ${secret}`, { status: 403 }), expected: { kind: 'http', status: 403 } },
+    { fetch: async () => { throw new Error(`network error ${secret}`); }, expected: { kind: 'fetch' } },
+    { fetch: async () => new Response(`malformed JSON ${secret}`), expected: { kind: 'parse' } },
+  ];
+  for (const scenario of cases) {
+    const failures = [];
+    const result = await getTmdbTitleDetails([1], { token: secret, getIdentity: async () => movieIdentity,
+      fetch: scenario.fetch, onFailure: failure => failures.push(failure) });
+    assert.deepEqual(failures, [scenario.expected]);
+    assert.deepEqual(result, { configured: true, items: {}, unavailable: true });
+    assert.ok(!JSON.stringify({ failures, result }).includes(secret));
+  }
+});
+
+test('a diagnostic callback failure cannot break optional artwork lookup', async () => {
+  const result = await getTmdbTitleDetails([1], { token: 'test-only-token', getIdentity: async () => movieIdentity,
+    fetch: async () => new Response('not exposed', { status: 429 }), onFailure: () => { throw Error('diagnostic sink failed'); } });
+  assert.deepEqual(result, { configured: true, items: {}, unavailable: true });
+});
+
+test('upstream redirects are never followed with the bearer credential', async () => {
+  let calls = 0, writes = 0;
+  const failures = [];
+  const result = await getTmdbTitleDetails([1], { token: 'test-only-token', getIdentity: async () => movieIdentity,
+    fetch: async (_url, init) => { calls++; assert.equal(init.redirect, 'manual'); return new Response(null, { status: 302, headers: { Location: 'https://untrusted.example/poster' } }); },
+    onFailure: failure => failures.push(failure), cache: { get: async () => null, set: async () => { writes++; } } });
+  assert.equal(calls, 1); assert.equal(writes, 0);
+  assert.deepEqual(failures, [{ kind: 'http', status: 302 }]);
+  assert.deepEqual(result, { configured: true, items: {}, unavailable: true });
 });
 test('public cache hits avoid both identity loading and external API requests', async () => {
   const cached = { posterUrl: 'https://image.tmdb.org/t/p/w342/poster123.jpg' };
