@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, Check, Clapperboard, Image, LoaderCircle, Star, Trash2, X } from "lucide-react";
+import { ArrowRight, Check, Clapperboard, LoaderCircle, Star, Trash2, X } from "lucide-react";
 import { api, message, mediaLabel, titleOf, type MediaType, type Movie, type User } from "./types";
 import { useTitleDetails } from "./metadata";
 import { RemoveRatingButton, TitleActions, useTitleActivity } from "./activity";
@@ -56,13 +56,13 @@ export function MovieCard({ movie, rating, onRate, onAdd, onRemove }: { movie: M
 }
 type MovieCollectionProps = { movies: Movie[]; ratings: Map<number, number>; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void; onRemove?: (movie: Movie) => void };
 
-/** The poster subtree mounts only while requested, keeping compact lists light. */
+/** A permanent small poster leads the row; hover/focus enlarges either target. */
 function CoverPreviewTitle({ movie, onRate, disabled }: { movie: Movie; onRate: () => void; disabled?: boolean }) {
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null), [pinned, setPinned] = useState(false);
   const anchor = useRef<HTMLSpanElement>(null), previewId = useId(), title = titleOf(movie);
   function close() { setPosition(null); setPinned(false); }
   function open(element: HTMLElement, pin = false) {
-    const rect = element.getBoundingClientRect(), width = 150, height = 250, margin = 12;
+    const rect = element.getBoundingClientRect(), width = 220, height = 350, margin = 12;
     const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
     const top = rect.bottom + height + margin <= window.innerHeight ? rect.bottom + 8 : Math.max(margin, rect.top - height - 8);
     setPosition({ left, top }); setPinned(pin);
@@ -75,18 +75,50 @@ function CoverPreviewTitle({ movie, onRate, disabled }: { movie: Movie; onRate: 
     document.addEventListener('pointerdown', outside); document.addEventListener('keydown', escape);
     return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
   }, [Boolean(position)]);
-  return <span className="collection-title-cell" ref={anchor} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) close(); }}>
+  return <span className="collection-title-cell" ref={anchor} onMouseLeave={() => { if (!pinned) close(); }} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) close(); }}>
+    <button type="button" className="collection-thumbnail-trigger" aria-label={`${pinned ? 'Hide' : 'Preview'} cover: ${title}`} aria-pressed={pinned} aria-describedby={position ? previewId : undefined}
+      onMouseEnter={event => { if (!pinned) open(event.currentTarget); }} onFocus={event => { if (!pinned) open(event.currentTarget); }}
+      onClick={event => { if (pinned) close(); else open(event.currentTarget, true); }}><Poster movie={movie} /></button>
     <button type="button" className="collection-title-trigger" onClick={() => { close(); onRate(); }} disabled={disabled} aria-describedby={position ? previewId : undefined}
-      onMouseEnter={event => { if (!pinned) open(event.currentTarget); }} onMouseLeave={() => { if (!pinned) close(); }} onFocus={event => { if (!pinned) open(event.currentTarget); }}>{title}</button>
-    <button type="button" className="collection-preview-trigger" aria-label={`${pinned ? 'Hide' : 'Preview'} cover: ${title}`} aria-pressed={pinned} onClick={event => { if (pinned) close(); else open(event.currentTarget, true); }}><Image size={16} /></button>
+      onMouseEnter={event => { if (!pinned) open(event.currentTarget); }} onFocus={event => { if (!pinned) open(event.currentTarget); }}>{title}</button>
     {position && createPortal(<div className="collection-cover-preview" role="tooltip" id={previewId} style={{ left: position.left, top: position.top }}><Poster movie={movie} /><span className="collection-cover-caption">{title}{movie.year ? ` (${movie.year})` : ''}</span></div>, document.body)}
   </span>;
 }
 
-export function MovieTable({ movies, ratings, onRate, onAdd, onRemove, currentMovieId, disabled = false, caption = 'Movies and whole TV series' }: MovieCollectionProps & { currentMovieId?: number; disabled?: boolean; caption?: string }) {
-  return <div className="collection-table-scroll" role="region" aria-label={caption} tabIndex={0}><table className="collection-table"><caption className="sr-only">{caption}. Hover or focus a title to preview its cover; select its title or rating to rate it.</caption><thead><tr><th scope="col">Title</th><th scope="col">Year</th><th scope="col">Type</th><th scope="col">Genres</th><th scope="col">Your rating</th><th scope="col">Actions</th></tr></thead><tbody>{movies.map(movie => {
+/** Inline editing reuses the same account-scoped persistence and mutation lock. */
+function CompactRating({ movie, rating, disabled = false, onSaved }: { movie: Movie; rating?: number; disabled?: boolean; onSaved?: (movie: Movie, rating: number) => void }) {
+  const activity = useTitleActivity(), title = titleOf(movie);
+  const [error, setError] = useState('');
+  const alive = useRef(true), saving = useRef(false);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const value = activity.draftRatings.get(movie.movieId) ?? rating ?? 5;
+  const response = feeling(value), pending = activity.pending.has(movie.movieId), busy = disabled || pending;
+  const changed = rating === undefined || Math.abs(value - rating) > .000001;
+  const canSave = changed || Boolean(onSaved);
+  async function save() {
+    if (disabled || pending || saving.current) return;
+    saving.current = true; setError('');
+    try {
+      // A successful save may refresh and unmount this row. The callback still
+      // advances its queue after persistence; account guards live in the provider.
+      if (await activity.saveRating(movie.movieId, value)) onSaved?.(movie, value);
+    } catch (failure) { if (alive.current) setError(message(failure)); }
+    finally { saving.current = false; }
+  }
+  return <div className="collection-inline-rating" role="group" aria-label={`Rate ${title} in this row`}>
+    <div className="collection-inline-summary"><span className="collection-inline-emoji" aria-hidden="true">{response.emoji}</span><span className="collection-inline-value"><strong>{value.toFixed(1)}<small> / 10</small></strong><span className="collection-inline-feedback">{rating === undefined ? 'Not rated yet' : changed ? 'Unsaved change' : 'Saved rating'}</span></span></div>
+    <input type="range" className="collection-inline-range" min="1" max="10" step="0.1" value={value} disabled={busy} aria-label={`Your rating for ${title}`} aria-valuetext={`${value.toFixed(1)} out of 10, ${response.label}`} onChange={event => { setError(''); activity.setDraftRating(movie.movieId, Number(event.target.value)); }} />
+    <button type="button" className="collection-inline-save" onClick={() => void save()} disabled={busy || (Boolean(activity.user) && !canSave)} aria-label={`${activity.user ? 'Save' : 'Sign in to save'} ${value.toFixed(1)} out of 10 rating for ${title}${onSaved ? ' and show the next title' : ''}`}>
+      {pending ? <LoaderCircle size={14} className="spinning" /> : <Check size={14} />}<span>{pending ? 'Saving…' : activity.user ? onSaved ? 'Save & next' : changed ? 'Save' : 'Saved' : 'Sign in to save'}</span>
+    </button>
+    {error && <p className="collection-inline-error" role="alert">{error}</p>}
+  </div>;
+}
+
+export function MovieTable({ movies, ratings, onRate, onAdd, onRemove, currentMovieId, disabled = false, caption = 'Movies and whole TV series', onInlineSaved }: MovieCollectionProps & { currentMovieId?: number; disabled?: boolean; caption?: string; onInlineSaved?: (movie: Movie, rating: number) => void }) {
+  return <div className="collection-table-scroll" role="region" aria-label={caption} tabIndex={0}><table className="collection-table"><caption className="sr-only">{caption}. Hover or focus a poster or title for a larger cover. Adjust the slider and save your rating in its row.</caption><thead><tr><th scope="col">Poster and title</th><th scope="col">Year</th><th scope="col">Type</th><th scope="col">Genres</th><th scope="col">Your rating</th><th scope="col">Actions</th></tr></thead><tbody>{movies.map(movie => {
     const rating = ratings.get(movie.movieId);
-    return <tr key={movie.movieId} className={currentMovieId === movie.movieId ? 'collection-row-current' : undefined}><th scope="row"><CoverPreviewTitle movie={movie} onRate={() => onRate(movie)} disabled={disabled} /></th><td>{movie.year || '—'}</td><td>{mediaLabel(movie)}</td><td>{movie.genres.filter(genre => genre !== '(no genres listed)').slice(0, 2).join(' / ') || '—'}</td><td><button type="button" className={`collection-score ${rating !== undefined ? 'is-rated' : ''}`} onClick={() => onRate(movie)} disabled={disabled} aria-label={`${rating === undefined ? 'Rate' : `Edit ${rating.toFixed(1)} out of 10 rating for`} ${titleOf(movie)}`}>{rating === undefined ? 'Rate' : `${rating.toFixed(1)} / 10`}</button></td><td><div className="collection-row-actions"><TitleActions movie={movie} onAdd={() => onAdd(movie)} compact disabled={disabled} />{onRemove && <button type="button" className="collection-remove" disabled={disabled} aria-label={`Remove ${titleOf(movie)} from this list`} onClick={() => onRemove(movie)}><Trash2 size={15} /><span>Remove</span></button>}</div></td></tr>;
+    return <tr key={movie.movieId} className={currentMovieId === movie.movieId ? 'collection-row-current' : undefined}><th scope="row"><CoverPreviewTitle movie={movie} onRate={() => onRate(movie)} disabled={disabled} /></th><td>{movie.year || '—'}</td><td>{mediaLabel(movie)}</td><td>{movie.genres.filter(genre => genre !== '(no genres listed)').slice(0, 2).join(' / ') || '—'}</td><td><CompactRating movie={movie} rating={rating} disabled={disabled} onSaved={onInlineSaved} /></td><td><div className="collection-row-actions"><TitleActions movie={movie} onAdd={() => onAdd(movie)} compact disabled={disabled} />{onRemove && <button type="button" className="collection-remove" disabled={disabled} aria-label={`Remove ${titleOf(movie)} from this list`} onClick={() => onRemove(movie)}><Trash2 size={15} /><span>Remove</span></button>}</div></td></tr>;
   })}</tbody></table></div>;
 }
 
@@ -96,7 +128,7 @@ export function MovieGrid(props: MovieCollectionProps) {
 }
 export function SkeletonGrid() {
   const { view } = useCollectionView();
-  return view === 'compact' ? <div className="collection-table-scroll collection-table-loading" aria-busy="true" aria-label="Loading titles"><table className="collection-table"><thead><tr>{['Title', 'Year', 'Type', 'Genres', 'Your rating', 'Actions'].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>{Array.from({ length: 6 }, (_, index) => <tr key={index}><td colSpan={6}><span className="collection-loading-line">Loading titles…</span></td></tr>)}</tbody></table></div> : <div className="movie-grid" aria-busy="true" aria-label="Loading titles">{Array.from({ length: 8 }, (_, index) => <div className="skeleton-card" key={index}><div /><span /><span /></div>)}</div>;
+  return view === 'compact' ? <div className="collection-table-scroll collection-table-loading" aria-busy="true" aria-label="Loading titles"><table className="collection-table"><thead><tr>{['Poster and title', 'Year', 'Type', 'Genres', 'Your rating', 'Actions'].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>{Array.from({ length: 6 }, (_, index) => <tr key={index}><td colSpan={6}><span className="collection-loading-line">Loading titles…</span></td></tr>)}</tbody></table></div> : <div className="movie-grid" aria-busy="true" aria-label="Loading titles">{Array.from({ length: 8 }, (_, index) => <div className="skeleton-card" key={index}><div /><span /><span /></div>)}</div>;
 }
 
 function feeling(value: number) {

@@ -9,6 +9,9 @@ type ActivityContextValue = {
   ratings: Map<number, number>;
   states: Map<number, TitleState>;
   pending: Set<number>;
+  draftRatings: Map<number, number>;
+  setDraftRating: (movieId: number, rating: number) => void;
+  discardDraftRating: (movieId: number) => void;
   updateState: (movieId: number, patch: Partial<Pick<TitleState, "liked" | "watched">>) => Promise<boolean>;
   saveRating: (movieId: number, rating: number) => Promise<boolean>;
   removeRating: (movieId: number, clearWatched?: boolean) => Promise<boolean>;
@@ -21,9 +24,23 @@ export function TitleActivityProvider({ user, ratings, states, onAuth, onCommit,
   onAuth: () => void; onCommit: (change: ActivityChange) => void; children: ReactNode;
 }) {
   const [pending, setPending] = useState(new Set<number>());
+  // Drafts stay inside this account provider, not row components or browser
+  // storage, so refreshing another shelf cannot erase an unsaved slider value.
+  const [draftRatings, setDraftRatings] = useState(new Map<number, number>());
   const locks = useRef(new Set<number>()), alive = useRef(true), owner = useRef(user?.id);
   owner.current = user?.id;
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+
+  function setDraftRating(movieId: number, rating: number) {
+    if (locks.current.has(movieId) || !Number.isFinite(rating) || rating < 1 || rating > 10) return;
+    setDraftRatings(previous => new Map(previous).set(movieId, Math.round(rating * 10) / 10));
+  }
+  function discardDraftRating(movieId: number) {
+    setDraftRatings(previous => {
+      if (!previous.has(movieId)) return previous;
+      const next = new Map(previous); next.delete(movieId); return next;
+    });
+  }
 
   async function mutate(movieId: number, operation: () => Promise<ActivityChange>) {
     const ownerId = user?.id;
@@ -41,26 +58,32 @@ export function TitleActivityProvider({ user, ratings, states, onAuth, onCommit,
     }
   }
   async function updateState(movieId: number, patch: Partial<Pick<TitleState, "liked" | "watched">>) {
-    return mutate(movieId, async () => {
+    const saved = await mutate(movieId, async () => {
       const response = await api<{ state: TitleState; ratingRemoved?: boolean }>("/api/title-state", {
         method: "PUT", body: JSON.stringify({ movieId, ...patch }),
       });
       return { movieId, state: response.state, ...(response.ratingRemoved || patch.watched === false ? { rating: null } : {}) };
     });
+    if (saved && patch.watched === false) discardDraftRating(movieId);
+    return saved;
   }
   async function saveRating(movieId: number, rating: number) {
-    return mutate(movieId, async () => {
+    const saved = await mutate(movieId, async () => {
       await api("/api/ratings", { method: "PUT", body: JSON.stringify({ movieId, rating, ratingScale: 10 }) });
       return { movieId, rating, state: { movieId, liked: states.get(movieId)?.liked || false, watched: true } };
     });
+    if (saved) discardDraftRating(movieId);
+    return saved;
   }
   async function removeRating(movieId: number, clearWatched = false) {
-    return mutate(movieId, async () => {
+    const saved = await mutate(movieId, async () => {
       await api(`/api/ratings?movieId=${movieId}${clearWatched ? "&watched=false" : ""}`, { method: "DELETE" });
       return { movieId, rating: null, ...(clearWatched ? { state: { movieId, liked: states.get(movieId)?.liked || false, watched: false } } : {}) };
     });
+    if (saved) discardDraftRating(movieId);
+    return saved;
   }
-  return <ActivityContext.Provider value={{ user, ratings, states, pending, updateState, saveRating, removeRating }}>{children}</ActivityContext.Provider>;
+  return <ActivityContext.Provider value={{ user, ratings, states, pending, draftRatings, setDraftRating, discardDraftRating, updateState, saveRating, removeRating }}>{children}</ActivityContext.Provider>;
 }
 
 export function useTitleActivity() {

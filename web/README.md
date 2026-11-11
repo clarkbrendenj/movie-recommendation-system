@@ -48,10 +48,17 @@ ratings without changing any saved scores or inventing viewing dates.
 
 A global **Posters / Compact list** toggle switches title collections, rating
 queues/search, saved lists, Together picks, and rating history to dense table
-rows. The preference is saved in this browser and follows navigation. Title
-hover or keyboard focus opens a cover preview; a separate preview button also
-works on touch screens. Compact rating mode opens the same vertical fader in a
-dialog and retains Save & Next behavior and 0.1-point scores.
+rows. The preference is saved in this browser and follows navigation. Each row
+starts with a visible small poster followed by its title. Hover or keyboard
+focus on either enlarges the cover, and tapping the thumbnail pins the preview.
+Rows include a condensed horizontal red-to-green slider, changing emoji, score,
+and explicit Save button. Scores remain 1–10 in 0.1 steps, starting at 5 for an
+unrated title; existing scores keep their saved value. Moving a slider does not
+write a rating. Queue rows remove only the successfully saved title and keep
+other queued titles and drafts. Unsaved scores remain in account-scoped memory
+through row refreshes and failed requests, and clear only after a successful
+save or correction. The full vertical-fader editor remains available on title
+selection and shares these pending scores.
 
 Existing hearts become Favorites without a database migration; the stored API
 field remains `liked` for compatibility. A Favorite is a binary positive signal,
