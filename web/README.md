@@ -1,4 +1,10 @@
-# Afterglow
+# The Midnight Theater
+
+**Entrance Not for Everyone.** The display brand uses a deep crimson curtain
+palette, black surfaces, bone and gold accents, and upright theater placard
+lettering. Bebas Neue is self-hosted under the SIL Open Font License; its license
+is included in `public/fonts/BebasNeue-OFL.txt`. Existing host, account, database,
+and browser-storage identifiers retain their operational Afterglow names.
 
 A movie and whole-series rating app with two independently selected pipelines.
 Movies use the original MovieLens CF + plots + cast + IMDb winner; series use
@@ -27,6 +33,22 @@ fit the available screen height. Compact lists keep horizontal scrolling with
 a swipe hint; their first column stops sticking on screens at most 560px wide
 so rating and status columns remain reachable. The viewport follows the device
 width and retains user zoom.
+
+On phones, rating a title opens a full-screen editor above the page navigation.
+The title, poster, vertical slider, emoji/score, Favorite, list and Save controls
+share one dynamic-viewport layout. Closing it returns to the searchable rating
+page. Saving in the queue quietly advances to the next title; rating-success
+toasts are removed, while compact rows retain their saved checkmark. Other
+account/list feedback and actual errors remain available.
+
+Cast, crew, genres, source credits and watched controls are available through
+**Details & activity**, in a separate dialog. Normal portrait phone editors use
+the visible viewport without scrolling. Short landscape screens, enlarged text,
+errors and removal confirmations retain a scrolling fallback to keep their
+controls accessible. Dialogs render outside animated page content, restore focus,
+and only the topmost dialog handles Escape or traps focus. The tab headings now
+state their function directly: recommendations, rating modes, watchlists,
+Together recommendations, and saved ratings.
 
 The movie basis retains all 6,885 original feature rows. A documented exact-ID
 IMDb overlay excludes 67 known series/episodes from new movie discovery, leaving

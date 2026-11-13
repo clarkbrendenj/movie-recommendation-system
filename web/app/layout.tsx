@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { APP_NAME, APP_TAGLINE } from "../lib/app-brand.mjs";
 
 export const metadata: Metadata = {
-  title: "Afterglow — your private picture house",
-  description: "Your private picture house. Rate movies and whole TV series, save watchlists, and discover a great watch together.",
+  title: `${APP_NAME} — ${APP_TAGLINE}`,
+  description: "Rate movies and whole TV series, get recommendations based on your ratings, and build watchlists and shared recommendations with friends.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
@@ -14,7 +15,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#111015",
+  themeColor: "#190608",
 };
 
 export default function RootLayout({
