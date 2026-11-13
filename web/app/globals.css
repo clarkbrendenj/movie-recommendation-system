@@ -48,7 +48,7 @@ a { color:inherit; }
 .brand-emblem { border:1px solid #c7a46a75; color:var(--gold); width:52px; height:64px; display:grid; place-items:center; position:relative; }
 .brand-emblem::before,.brand-emblem::after { position:absolute; content:""; height:1px; width:16px; background:var(--gold); left:17px; }
 .brand-emblem::before { top:8px; }.brand-emblem::after { bottom:8px; }
-.wordmark strong { display:block; font:italic 46px/.9 Georgia,"Times New Roman",serif; font-weight:400; letter-spacing:-2.5px; }
+.wordmark strong { display:block; font:800 42px/1 "Arial Narrow","Helvetica Neue",Arial,sans-serif; letter-spacing:1.5px; text-transform:uppercase; }
 .brand-dot { font-size:23px; vertical-align:top; color:var(--gold); margin-left:5px; }
 .wordmark small { display:block; font:8px/1.5 "Courier New",monospace; letter-spacing:2px; color:#d6bd96; margin-top:13px; }
 .header-right { display:flex; gap:28px; align-items:center; }
@@ -213,7 +213,7 @@ h1,h2,h3,p { margin-top:0; }
 .stack-form .notice { margin:0; }
 .house-footer { background:#18131b; border-top:1px solid #59414e; }
 .footer-inner { display:grid; grid-template-columns:auto 1fr; gap:8px 28px; align-items:center; padding:30px 0 26px; }
-.footer-wordmark { font:italic 29px Georgia,serif; color:var(--rose); letter-spacing:-1.3px; }
+.footer-wordmark { font:800 24px/1.2 "Arial Narrow","Helvetica Neue",Arial,sans-serif; color:var(--rose); letter-spacing:1.5px; text-transform:uppercase; }
 .footer-wordmark span { font-size:15px; color:var(--gold); }
 .footer-inner > p { margin:0; text-align:right; font:italic 14px Georgia,serif; color:#d4b987; }
 .footer-sources { grid-column:1/-1; font-size:9px; color:var(--muted); line-height:1.9; }
@@ -352,7 +352,7 @@ input[type=checkbox] { accent-color:var(--rose); }
   .picture-house .header-inner,.picture-house .page-content,.picture-house .footer-inner { width:calc(100% - 32px); min-width:0; }
   .picture-house .header-inner { min-height:78px; gap:12px; }
   .picture-house .wordmark { min-width:0; gap:8px; }
-  .picture-house .wordmark strong { font-size:34px; }
+  .picture-house .wordmark strong { font-size:32px; }
   .picture-house .wordmark small { margin-top:8px; }
   .picture-house .brand-emblem { width:32px; height:43px; flex-shrink:0; }
   .picture-house .brand-emblem::before,.picture-house .brand-emblem::after { left:8px; width:14px; }
@@ -410,7 +410,7 @@ input[type=checkbox] { accent-color:var(--rose); }
   .picture-house .toast { bottom:max(12px,env(safe-area-inset-bottom)); font-size:12px; }
 }
 @media(max-width:380px) {
-  .picture-house .wordmark strong { font-size:32px; }
+  .picture-house .wordmark strong { font-size:30px; }
   .picture-house .house-nav { gap:0 4px; }
   .picture-house .house-nav button { padding-inline:3px; font-size:11px; }
   .picture-house .rating-expression { gap:12px; }
