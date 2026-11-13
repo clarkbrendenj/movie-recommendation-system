@@ -1,0 +1,87 @@
+/* Art Deco live type and steady incandescent bulbs, inspired by old cinema signs. */
+.picture-house .midnight-wordmark { min-width:0; gap:0; }
+.picture-house .midnight-wordmark .theater-wordmark {
+  display:block;
+  flex:0 1 auto;
+  width:clamp(270px,28vw,360px);
+  max-width:100%;
+  min-width:0;
+  padding:0;
+  border:0;
+  background:none;
+  box-shadow:none;
+  text-align:center;
+}
+.theater-wordmark-art {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible;
+}
+.theater-wordmark-art text {
+  font-family:"Limelight","Bebas Neue",Impact,"Arial Narrow",sans-serif;
+  font-style:normal;
+  font-weight:400;
+}
+.theater-wordmark-kicker {
+  font-size:25px;
+  fill:#fff0c9;
+  stroke:#32140c;
+  stroke-width:.45px;
+  paint-order:stroke fill;
+  filter:drop-shadow(0 1px 1px #090100cc);
+}
+.theater-wordmark-letter { font-size:74px; }
+.theater-wordmark-outline {
+  fill:#85111b;
+  stroke:#f6d28a;
+  stroke-width:3px;
+  stroke-linejoin:round;
+  paint-order:stroke fill;
+  filter:drop-shadow(0 2px 1px #100000) drop-shadow(0 0 4px #e7a83555);
+}
+.theater-wordmark-face {
+  fill:#a21922;
+  stroke:#6b2e13;
+  stroke-width:.65px;
+  stroke-linejoin:round;
+  paint-order:stroke fill;
+}
+.theater-wordmark-bulbs { stroke:none; }
+.theater-wordmark-rule { fill:none; stroke:#d8b875; stroke-width:1; opacity:.8; }
+.theater-wordmark-diamond { fill:#d8b875; opacity:.9; }
+.picture-house .midnight-wordmark .theater-wordmark-tagline {
+  display:block;
+  margin:4px 0 0;
+  color:#f3d79a;
+  font:600 10px/1.4 "Segoe UI",Arial,sans-serif;
+  letter-spacing:1.8px;
+  text-transform:uppercase;
+  text-shadow:0 1px 3px #090000;
+}
+.picture-house .footer-wordmark .theater-wordmark-compact {
+  display:block;
+  width:210px;
+  max-width:100%;
+  padding:0;
+  border:0;
+  background:none;
+  box-shadow:none;
+}
+@media(max-width:700px) {
+  .picture-house .midnight-wordmark { max-width:calc(100% - 92px); }
+  .picture-house .midnight-wordmark .theater-wordmark { width:clamp(188px,57vw,226px); }
+  .picture-house .midnight-wordmark .theater-wordmark-tagline {
+    margin-top:3px;
+    font-size:9px;
+    line-height:1.4;
+    letter-spacing:.75px;
+    white-space:nowrap;
+  }
+  .picture-house .footer-wordmark .theater-wordmark-compact { width:160px; }
+}
+@media(max-width:350px) {
+  .picture-house .midnight-wordmark .theater-wordmark { width:188px; }
+  .picture-house .midnight-wordmark .theater-wordmark-tagline { letter-spacing:.5px; }
+  .picture-house .footer-wordmark .theater-wordmark-compact { width:145px; }
+}

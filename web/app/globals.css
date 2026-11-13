@@ -10,6 +10,14 @@
   font-display:swap;
 }
 
+@font-face {
+  font-family:"Limelight";
+  src:url("/fonts/Limelight-Regular.ttf") format("truetype");
+  font-style:normal;
+  font-weight:400;
+  font-display:swap;
+}
+
 :root {
   color-scheme:dark;
   --paper:#0b0708;
@@ -49,7 +57,16 @@ a { color:inherit; }
 .picture-house { min-height:100vh; display:flex; flex-direction:column; }
 .skip-link { position:fixed; left:16px; top:-60px; z-index:100; padding:12px 18px; background:var(--cream); color:var(--deep); }
 .skip-link:focus { top:16px; }
-.house-header { color:var(--cream); background:linear-gradient(180deg,#0b000038 0,#11000394 100%),repeating-linear-gradient(90deg,#260309 0,#4b0913 14px,#6b1020 28px,#3a060f 42px,#200206 56px); border-top:3px solid var(--gold); box-shadow:0 2px 0 #c7a46a40; }
+.house-header {
+  color:var(--cream);
+  background-color:#510a14;
+  background-image:linear-gradient(180deg,#1000030d,#10000330),url("/images/midnight-velvet-curtain.webp");
+  background-size:100% 100%,max(100%,1100px) auto;
+  background-position:center,center 45%;
+  background-repeat:no-repeat;
+  border-top:3px solid var(--gold);
+  box-shadow:0 2px 0 #c7a46a40;
+}
 .header-inner,.house-nav,.page-content,.footer-inner { width:calc(100% - 112px); max-width:1280px; margin:0 auto; }
 .header-inner { min-height:113px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
 .wordmark { display:flex; gap:15px; align-items:center; color:var(--cream); padding:0; text-align:left; }
@@ -426,7 +443,7 @@ input[type=checkbox] { accent-color:var(--rose); }
 }
 
 /* The Midnight Theater: a crimson curtain and an upright theater placard. */
-:root { --placard-font:"Bebas Neue",Impact,Haettenschweiler,"Arial Narrow Bold","Arial Narrow",sans-serif; }
+:root { --placard-font:"Limelight","Bebas Neue",Impact,"Arial Narrow",sans-serif; }
 .picture-house .header-inner { min-height:164px; padding-top:18px; padding-bottom:18px; }
 .midnight-wordmark { gap:19px; }
 .midnight-wordmark .brand-emblem { background:#1a0308b8; border-color:#d8b87588; }

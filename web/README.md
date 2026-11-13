@@ -2,8 +2,10 @@
 
 **Entrance Not for Everyone.** The display brand uses a deep crimson curtain
 palette, black surfaces, bone and gold accents, and upright theater placard
-lettering. Bebas Neue is self-hosted under the SIL Open Font License; its license
-is included in `public/fonts/BebasNeue-OFL.txt`. Existing host, account, database,
+lettering. The masthead uses an original generated velvet photograph with broad
+natural folds. Live Art Deco SVG lettering adds static warm marquee bulbs inside
+the red-and-gold THEATER title. Limelight and Bebas Neue are self-hosted under the
+SIL Open Font License; their licenses are included in `public/fonts`. Existing host, account, database,
 and browser-storage identifiers retain their operational Afterglow names.
 
 A movie and whole-series rating app with two independently selected pipelines.
