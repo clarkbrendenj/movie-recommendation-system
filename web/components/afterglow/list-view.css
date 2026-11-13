@@ -65,3 +65,12 @@
   .list-overview .list-open-card { transition:none; }
   .list-overview .list-open-card:hover { transform:none; }
 }
+@media(max-width:700px) {
+  .list-focus-topbar { flex-wrap:wrap; gap:6px 12px; padding-top:6px; }
+  .list-back-button { font-size:13px; }
+  .list-focus-heading h1 { font-size:clamp(29px,8vw,37px); }
+  .list-focus-heading p { font-size:13px; }
+  .list-focus-heading .list-controls .button { min-height:44px; font-size:12px; }
+  .list-saved-section > .list-toolbar { align-items:flex-start; gap:8px; }
+  .list-focused-view.list-detail .movie-grid { gap:26px 12px; }
+}

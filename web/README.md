@@ -11,6 +11,23 @@ Navigation explicitly separates Movie recommendations, TV recommendations, and
 the two rating modes. Opening a list replaces the overview with a dedicated
 list view and a prominent Back control.
 
+Personal movie and whole-series recommendations now return **up to 20 titles**;
+Together lists return up to 20 per included media type. The API default is 20
+with a maximum of 48 when a limit is supplied. Models rank the full eligible
+catalog and apply exclusions before choosing the displayed count. Extending a
+shelf preserves its original first ten titles and scores, with no retraining.
+Recall@10 remains a ten-result benchmark; evaluating twenty results requires
+separate Recall@20/NDCG@20 measurements. More titles increase response and artwork
+loading, while the existing sparse ranking computation stays the same.
+
+On phones, all six navigation destinations appear in two rows. Poster cards
+keep two columns, form inputs use 16px text, and primary controls provide at
+least 44px touch areas. Rating controls and dialogs use narrower gutters and
+fit the available screen height. Compact lists keep horizontal scrolling with
+a swipe hint; their first column stops sticking on screens at most 560px wide
+so rating and status columns remain reachable. The viewport follows the device
+width and retains user zoom.
+
 The movie basis retains all 6,885 original feature rows. A documented exact-ID
 IMDb overlay excludes 67 known series/episodes from new movie discovery, leaving
 6,818 movie candidates. The TV catalog contains 1,715 provisional whole-series

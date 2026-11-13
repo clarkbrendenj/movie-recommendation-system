@@ -159,13 +159,18 @@ test("exported TV model preserves every Python reference top ten and score", asy
   const movieIds = new Set(movies.movies.map(item => item.movieId));
   assert.ok(reference.candidateIds.every(id => !movieIds.has(id)));
   for (const example of reference.cases) {
+    const seen = new Set(example.ratings.map(item => item.movieId));
     const actual = recommendSeries(model, example.ratings, 10);
+    const expanded = recommendSeries(model, example.ratings, 20);
+    const available = metadata.items.filter(item => item.eligible && item.candidate && item.mediaType === 'series' && !seen.has(item.movieId)).length;
+    assert.equal(expanded.movies.length, Math.min(20, available), `${example.name}: up to twenty unseen whole-series picks`);
+    assert.deepEqual(expanded.movies.slice(0, 10), actual.movies, `${example.name}: expanded list preserves scores and top ten`);
     assert.deepEqual(actual.movies.map(item => item.movieId), example.top10, example.name);
     for (const expected of example.scores) {
       const item = actual.movies.find(row => row.movieId === expected.movieId);
       assert.ok(item && Math.abs(item.score - expected.score) < 1e-6, `${example.name}: score mismatch`);
     }
-    const seen = new Set(example.ratings.map(item => item.movieId));
     assert.ok(actual.movies.every(item => !seen.has(item.movieId)));
+    assert.ok(expanded.movies.every(item => !seen.has(item.movieId)));
   }
 });

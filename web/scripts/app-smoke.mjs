@@ -62,6 +62,12 @@ assert.equal(separate.sections.movies.mode, "starter");
 assert.equal(separate.sections.series.mode, "personalized");
 assert.ok(separate.movies.every(m => m.mediaType === "movie" && m.movieId !== film.movieId));
 assert.ok(separate.series.every(m => m.mediaType === "series" && m.movieId !== series.movieId));
+const expandedPersonal = await alice('/api/recommendations?type=both');
+for (const kind of ['movies', 'series']) {
+  assert.equal(expandedPersonal.sections[kind].movies.length, 20, `${kind}: default shelf has twenty titles`);
+  assert.deepEqual(expandedPersonal.sections[kind].movies.slice(0, 12), separate.sections[kind].movies, `${kind}: expanding the shelf preserves existing ranking and scores`);
+}
+await alice('/api/recommendations?limit=49', { expected: 400 });
 
 // Favorites override the positive-preference threshold without rewriting scores.
 const stateOf = (account, id) => account.titleStates.find(state => state.movieId === id);
@@ -145,6 +151,11 @@ await bob(`/api/lists/${together.id}`, { method: "PATCH", body: { name: "Cannot 
 const group = await bob(`/api/lists/${together.id}/recommendations?limit=12`);
 assert.equal(group.sections.movies.movies.length, 12);
 assert.equal(group.sections.series.movies.length, 12);
+const expandedGroup = await bob(`/api/lists/${together.id}/recommendations`);
+for (const kind of ['movies', 'series']) {
+  assert.equal(expandedGroup.sections[kind].movies.length, 20, `${kind}: default Together shelf has twenty titles`);
+  assert.deepEqual(expandedGroup.sections[kind].movies.slice(0, 12), group.sections[kind].movies, `${kind}: Together utilities are independent of shelf size`);
+}
 for (const item of [...group.movies, ...group.series]) assert.ok(![film.movieId, series.movieId, watchedWithoutScore.movieId].includes(item.movieId));
 assert.ok(!JSON.stringify(group).includes('"ratings":'), "Group responses must not expose individual histories.");
 assert.ok(!JSON.stringify(group).includes('"titleStates":'), 'Group responses must not expose private Likes or watched flags.');

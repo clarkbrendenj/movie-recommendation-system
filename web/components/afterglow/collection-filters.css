@@ -405,4 +405,10 @@
   .collection-filter-body { padding:14px; }
   .collection-filter-footer { padding:10px 14px; }
   .collection-filter-checklist { max-height:200px; }
+  .collection-filter-fields select,.collection-filter-fields input[type=number],.collection-filter-fields input[type=search] { font-size:16px; }
+  .collection-query-filter-buttons { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .collection-query-filter-buttons > .collection-heading-filter { width:100%; font-size:12px; }
+  .collection-query-filter-buttons > .collection-heading-filter:last-child { grid-column:1/-1; }
+  .collection-filter-choice { font-size:13px; }
+  .collection-query-summary { font-size:12px; }
 }

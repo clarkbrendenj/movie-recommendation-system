@@ -1,4 +1,5 @@
 /* A shared compact catalog view, keeping each title and its actions in one row. */
+.collection-mobile-hint { display:none; }
 .collection-view-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:10px; margin:0 0 25px; color:var(--muted); font-size:10px; }
 .collection-view-toolbar > span { font:9px/1.5 "Courier New",monospace; text-transform:uppercase; letter-spacing:1.4px; }
 .collection-view-toggle { display:inline-flex; align-items:center; gap:3px; padding:3px; border:1px solid #684b5e; background:#1b151f; border-radius:4px; }
@@ -105,6 +106,7 @@
 .list-overview-name:hover,.list-overview-name:focus-visible { color:var(--rose); text-decoration:underline; text-underline-offset:4px; }
 .collection-table.list-overview-table button:not(.list-overview-name) { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:44px; padding:8px 10px; color:var(--gold); font-size:11px; }
 @media(max-width:700px) {
+  .collection-mobile-hint { display:block; margin:0 0 10px; color:var(--muted); font-size:12px; line-height:1.6; }
   .collection-view-toolbar { justify-content:flex-start; margin-bottom:23px; gap:8px; }
   .collection-view-toggle { flex:0 1 auto; }
   .collection-view-toggle button { font-size:10px; padding:9px 11px; }
@@ -129,4 +131,12 @@
   .collection-table.list-overview-table { min-width:560px; }
   .collection-table.list-overview-table td,.collection-table.list-overview-table tbody th { height:54px; padding-top:4px; padding-bottom:4px; }
   .list-overview-name { font-size:16px; }
+}
+@media(max-width:560px) {
+  .collection-table-scroll { -webkit-overflow-scrolling:touch; }
+  .collection-table th:first-child,.collection-table td:first-child { position:static; min-width:185px; max-width:220px; }
+  .collection-table thead th:first-child { position:static; }
+  .collection-title-trigger { font-size:12px; }
+  .collection-view-toolbar { margin-bottom:18px; }
+  .collection-view-toggle button { font-size:12px; }
 }

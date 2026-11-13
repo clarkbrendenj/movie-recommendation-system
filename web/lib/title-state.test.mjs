@@ -47,3 +47,15 @@ test('watched filtering fills the shelf without changing scores, rating counts, 
   assert.equal(shelf.movies[0], ranking.movies[1]);
   assert.equal(ranking.movies.length, 4);
 });
+
+test('twenty recommendations fill past watched titles and preserve the original top ten', () => {
+  const ranking = { movies: Array.from({ length: 40 }, (_, index) => ({ movieId: index + 1, score: 1 - index / 40 })), mode: 'personalized', likes: 3, ratingsCount: 5 };
+  const states = [{ movieId: 1, watched: true }, { movieId: 3, watched: true }, { movieId: 12, watched: true }];
+  const original = excludeWatched(ranking, states, 10);
+  const expanded = excludeWatched(ranking, states, 20);
+  assert.equal(expanded.movies.length, 20);
+  assert.deepEqual(expanded.movies.slice(0, 10), original.movies);
+  assert.ok(expanded.movies.every(item => !states.some(state => state.movieId === item.movieId)));
+  assert.equal(expanded.likes, ranking.likes);
+  assert.equal(expanded.ratingsCount, ranking.ratingsCount);
+});

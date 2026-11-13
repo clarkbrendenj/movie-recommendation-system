@@ -74,6 +74,7 @@
 @media(max-width:560px) {
   .collection-sort { gap:12px; padding:13px; }
   .collection-sort-field { flex:1 1 170px; }
-  .collection-sort-select { font-size:12px; }
+  .collection-sort-select { font-size:16px; }
   .collection-query-toolbar .collection-sort { flex-basis:100%; }
+  .collection-query-toolbar .collection-sort-field { flex-basis:130px; }
 }

@@ -4,6 +4,7 @@ import { ratings, titleStates } from "../../../../../db/schema";
 import { aggregateGroupRankings } from "../../../../../lib/collaboration-policy.mjs";
 import { rankMovies } from "../../../../../lib/recommender.mjs";
 import { rankSeries } from "../../../../../lib/tv-recommender.mjs";
+import { DEFAULT_RECOMMENDATION_LIMIT, MAX_RECOMMENDATION_LIMIT } from "../../../../../lib/recommendation-display.mjs";
 import { movieCandidateIds, movieCard } from "../../../../../lib/media-catalog.mjs";
 import { getModel, getMovieUnitOverlay, getTvModel } from "../../../../../lib/server-model";
 import { accessibleList, describeList, listId } from "../../../../../lib/server-lists";
@@ -20,7 +21,7 @@ export async function GET(request: Request, context: Context) {
     const list = await describeList(row, user.userId);
     const memberIds = list.members.map((member) => member.userId);
     const params = new URL(request.url).searchParams;
-    const limit = params.has("limit") ? positiveInteger(Number(params.get("limit")), "limit", 48) : 12;
+    const limit = params.has("limit") ? positiveInteger(Number(params.get("limit")), "limit", MAX_RECOMMENDATION_LIMIT) : DEFAULT_RECOMMENDATION_LIMIT;
     // Only this server-side computation reads consenting members' histories.
     // No participant's rating, utility, count, or personal reason is returned.
     const db = getDb();

@@ -1,6 +1,7 @@
 import { getAppUser } from "../../../lib/auth";
 import { rankMovies } from "../../../lib/recommender.mjs";
 import { rankSeries } from "../../../lib/tv-recommender.mjs";
+import { DEFAULT_RECOMMENDATION_LIMIT, MAX_RECOMMENDATION_LIMIT } from "../../../lib/recommendation-display.mjs";
 import { excludeWatched } from "../../../lib/title-state-policy.mjs";
 import { getUserTitleStates } from "../../../lib/server-title-state";
 import { movieCard, movieCandidateIds } from "../../../lib/media-catalog.mjs";
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
     const params = new URL(request.url).searchParams;
     const type = params.get("type") || "movies";
     if (!["movies", "series", "both"].includes(type)) throw new ApiError(400, "Choose movies, series, or both.");
-    const limit = params.has("limit") ? positiveInteger(Number(params.get("limit")), "limit", 48) : 12;
+    const limit = params.has("limit") ? positiveInteger(Number(params.get("limit")), "limit", MAX_RECOMMENDATION_LIMIT) : DEFAULT_RECOMMENDATION_LIMIT;
     const user = await getAppUser(request);
     const [ratings, states] = user ? await Promise.all([getUserRatings(user.userId), getUserTitleStates(user.userId)]) : [[], []];
     // The legacy liked flag is now the explicit Favorite override. Scores remain intact.

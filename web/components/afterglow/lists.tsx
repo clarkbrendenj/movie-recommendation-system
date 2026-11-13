@@ -7,6 +7,7 @@ import { AuthGate, Busy, Empty, ErrorNotice, Modal, MovieGrid } from "./ui";
 import { useCollectionView } from "./collection-view";
 import { useTitleActivity } from "./activity";
 import { CollectionQueryControls, useCollectionQuery } from "./collection-query";
+import { DEFAULT_RECOMMENDATION_LIMIT } from "../../lib/recommendation-display.mjs";
 import "./list-view.css";
 
 type ScreenProps = { kind: "watchlist" | "together"; user: User | null; ratings: Map<number, number>; onAuth: () => void; onRate: (movie: Movie) => void; onAdd: (movie: Movie) => void; onToast: (text: string) => void; onNavigate: (tab: Tab) => void; revision: number };
@@ -83,7 +84,7 @@ function ListsSession({ kind, user, ratings, onRate, onAdd, onToast, onNavigate,
     if (!selected) { setDetail(null); setRecommendations(null); return; }
     const controller = new AbortController(); setDetail(null); setRecommendations(null); setDetailLoading(true); setDetailError(""); setRecError("");
     api<{ list: SavedList; items: Movie[] }>(`/api/lists/${selected}`, { signal: controller.signal }).then(data => { if (!controller.signal.aborted) setDetail(data); }).catch(failure => { if (!controller.signal.aborted) setDetailError(message(failure)); }).finally(() => { if (!controller.signal.aborted) setDetailLoading(false); });
-    if (kind === "together") { setRecLoading(true); api<Recommendations>(`/api/lists/${selected}/recommendations?limit=12`, { signal: controller.signal }).then(data => { if (!controller.signal.aborted) setRecommendations(data); }).catch(failure => { if (!controller.signal.aborted) setRecError(message(failure)); }).finally(() => { if (!controller.signal.aborted) setRecLoading(false); }); }
+    if (kind === "together") { setRecLoading(true); api<Recommendations>(`/api/lists/${selected}/recommendations?limit=${DEFAULT_RECOMMENDATION_LIMIT}`, { signal: controller.signal }).then(data => { if (!controller.signal.aborted) setRecommendations(data); }).catch(failure => { if (!controller.signal.aborted) setRecError(message(failure)); }).finally(() => { if (!controller.signal.aborted) setRecLoading(false); }); }
     return () => controller.abort();
   }, [selected, kind, detailRevision, revision]);
   useEffect(() => {
@@ -143,9 +144,11 @@ function ListsSession({ kind, user, ratings, onRate, onAdd, onToast, onNavigate,
           <p className="list-description">Picks balance everyone’s ranked preferences and leave out titles anyone has rated, watched, or favorited. Movies and series each have their own section.</p>
           {recError ? <ErrorNotice text={recError} retry={() => setDetailRevision(value => value + 1)} /> : recLoading ? <Busy text="Finding common ground…" /> : <>
             {recommendations?.sections?.movies && <section className="group-shelf"><h2>Movie recommendations for everyone</h2>
+              <p className="list-description">{recommendations.sections.movies.movies.length} {recommendations.sections.movies.movies.length === 1 ? 'movie recommendation' : 'movie recommendations'}</p>
               {recommendations.sections.movies.movies.length ? <MovieGrid movies={recommendations.sections.movies.movies} ratings={ratings} onRate={onRate} onAdd={movie => void saveTogether(movie)} /> : <p className="list-description">No unseen movie candidates are available for this group.</p>}
             </section>}
             {recommendations?.sections?.series && <section className="group-shelf"><h2>TV recommendations for everyone</h2>
+              <p className="list-description">{recommendations.sections.series.movies.length} {recommendations.sections.series.movies.length === 1 ? 'series recommendation' : 'series recommendations'}</p>
               {recommendations.sections.series.movies.length ? <MovieGrid movies={recommendations.sections.series.movies} ratings={ratings} onRate={onRate} onAdd={movie => void saveTogether(movie)} /> : <p className="list-description">No unseen series candidates are available for this group.</p>}
             </section>}
           </>}

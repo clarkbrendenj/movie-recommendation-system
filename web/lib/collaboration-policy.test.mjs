@@ -60,6 +60,17 @@ test("truncated candidate intersections and duplicate identities are rejected", 
   assert.throws(() => aggregateGroupRankings([], { eligibleIds: new Set([1]) }));
 });
 
+test("twenty Together picks preserve the top ten and group utilities after member exclusions", () => {
+  const ids = Array.from({ length: 40 }, (_, i) => i + 1);
+  const rankings = [cards(ids), cards([...ids].reverse())];
+  const options = { eligibleIds: new Set(ids), blockedIds: new Set([1, 20, 21, 40]) };
+  const original = aggregateGroupRankings(rankings, { ...options, limit: 10 });
+  const expanded = aggregateGroupRankings(rankings, { ...options, limit: 20 });
+  assert.equal(expanded.length, 20);
+  assert.deepEqual(expanded.slice(0, 10), original);
+  assert.ok(expanded.every(item => !options.blockedIds.has(item.movieId)));
+});
+
 test("union-seen and veto masking happen before common-pool normalization", () => {
   const rankings = [cards([1, 2, 3, 4]), cards([4, 3, 2])];
   const before = JSON.stringify(rankings);

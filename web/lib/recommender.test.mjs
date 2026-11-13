@@ -157,6 +157,9 @@ test("all frozen Python reference cases retain their top 10 and scores", async (
   const model = createModel(metadata, groups);
   for (const entry of reference.cases) {
     const result = recommend(model, entry.ratings, 10);
+    const expanded = recommend(model, entry.ratings, 20);
+    assert.equal(expanded.movies.length, 20, `${entry.name}: twenty movie picks`);
+    assert.deepEqual(expanded.movies.slice(0, 10), result.movies, `${entry.name}: expanded list preserves scores and top ten`);
     assert.deepEqual(result.movies.map((movie) => movie.movieId), entry.top10, entry.name);
     for (const expected of entry.scores) {
       const actual = result.movies.find((movie) => movie.movieId === expected.movieId);
@@ -166,5 +169,6 @@ test("all frozen Python reference cases retain their top 10 and scores", async (
     }
     const seen = new Set(entry.ratings.map((rating) => rating.movieId));
     assert.ok(result.movies.every((movie) => !seen.has(movie.movieId)));
+    assert.ok(expanded.movies.every((movie) => !seen.has(movie.movieId)));
   }
 });
